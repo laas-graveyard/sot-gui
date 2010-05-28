@@ -5,8 +5,7 @@
 # Authors Duong Dang
 
 import getopt,sys, warnings, imp, os, imp
-
-path = imp.find_module('robotviewer')[1]
+path = os.path.dirname(__file__)
 sys.path.append(path+'/corba')
 del path
 

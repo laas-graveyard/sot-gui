@@ -28,49 +28,29 @@ DotWindow.ui = '''
 graph_name = "sotgraph"
 sot_graph_file = "/tmp/sotgraph.dot"
 entities = list()
-en_list_store = gtk.ListStore(str)
-en_list_store.append(['foo'])
-en_list_store.append(['bar'])
-print str(en_list_store)
-en_tree_view = gtk.TreeView(en_list_store)
+en_model = gtk.ListStore(str,str)
+en_tree_view = gtk.TreeView(en_model)
+rendererText = gtk.CellRendererText()
 
-class Entity(object):
-    """
-    """
-    
-    def __init__(self, name, etype):
-        """        
-        Arguments:
-        - `name`:
-        - `type`:
-        """
-        self._name = name
-        self._type = etype
-        self._signals = []
+en_column1 = gtk.TreeViewColumn("Entities", rendererText, text=0)
+en_column2 = gtk.TreeViewColumn("Type", rendererText, text=1)
+en_column1.set_sort_column_id(0)    
+en_tree_view.append_column(en_column1)
+en_tree_view.append_column(en_column2)
 
-    def __str__(self):
-        return self._name + " %s"%self._type
 
 def fetch_info_and_graph():
-    global en_list_store,en_tree_view
-    global entities
+    global en_model,en_tree_view
     runAndReadWrap("pool.writegraph %s"%sot_graph_file)        
     entities_str = deque(runAndReadWrap("pool.list %s"%sot_graph_file).split())
-
-    entities = list()
-
-
-    while len(entities) > 0:
+    
+    while len(entities_str) > 0:
         aname = entities_str.popleft()
         atype = entities_str.popleft()
-        new_e = Entity(aname,atype)
-        entities.append(new_e)
+        if aname not in [ row[0] for row in en_model ]:
+            en_model.append([aname,atype])
 
-    for ent in entities:
-        en_list_store.append(str(ent)) 
-
-
-    en_tree_view.set_model(en_list_store)
+    print len(en_model)
 
     s = open(sot_graph_file).read()
     s = s.replace("/%s"%graph_name,graph_name)
@@ -93,7 +73,7 @@ def on_area_button_press_modified(self,area,event):
     return
 
 DotWidget.reload = reload_modified
-DotWidget.on_area_button_press = on_area_button_press_modified
+
 
 def dwindow_init(self):
     gtk.Window.__init__(self)
@@ -169,7 +149,8 @@ def dwindow_init(self):
     self.coshell_entry = gtk.Entry(max=50)
     hbox1.pack_start(self.coshell_entry,True,True,0)
     vbox_coshell.pack_start(hbox1,False,False,0)
-    self.coshell_entry.connect("activate", self.coshell_entry_callback, self.coshell_entry)
+    self.coshell_entry.connect\
+        ("activate", self.coshell_entry_callback, self.coshell_entry)
 
     ## scrolled windows
 
@@ -178,6 +159,7 @@ def dwindow_init(self):
     frame1 = gtk.Frame("coshell response")
     self.coshell_response = gtk.Label("")
     self.coshell_response.set_justify(gtk.JUSTIFY_LEFT)
+    self.coshell_response.set_line_wrap(True)
     frame1.add(self.coshell_response)
     sw.add_with_viewport(frame1)
     vbox_coshell.pack_start(sw,True,True,0)
@@ -187,11 +169,11 @@ def dwindow_init(self):
     label1 = gtk.Label('Ent goes here')
     label2 = gtk.Label('Sig goes here')
 
-    global en_tree_view
-    
-    hbox_sel.pack_start(en_tree_view)
-#    hbox_sel.pack_start(label2)
-    
+    global en_tree_view    
+    sw2 = gtk.ScrolledWindow()
+    sw2.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
+    sw2.add_with_viewport(en_tree_view)
+    hbox_sel.pack_start(sw2)
 
     self.set_focus(self.widget)
     self.show_all()
