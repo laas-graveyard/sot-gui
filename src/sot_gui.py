@@ -10,7 +10,7 @@ from xdot import *
 import os,re
 from corba_wrapper import runAndReadWrap
 import time
-
+from collections import deque
 DotWindow.ui = '''
     <ui>
         <toolbar name="ToolBar">
@@ -25,13 +25,52 @@ DotWindow.ui = '''
     </ui>
     '''
 
-graph_name="sotgraph"
-sot_graph_file="/tmp/sotgraph.dot"
+graph_name = "sotgraph"
+sot_graph_file = "/tmp/sotgraph.dot"
+entities = list()
+en_list_store = gtk.ListStore(str)
+en_list_store.append(['foo'])
+en_list_store.append(['bar'])
+print str(en_list_store)
+en_tree_view = gtk.TreeView(en_list_store)
 
-def get_graph_and_fix():
+class Entity(object):
+    """
+    """
+    
+    def __init__(self, name, etype):
+        """        
+        Arguments:
+        - `name`:
+        - `type`:
+        """
+        self._name = name
+        self._type = etype
+        self._signals = []
+
+    def __str__(self):
+        return self._name + " %s"%self._type
+
+def fetch_info_and_graph():
+    global en_list_store,en_tree_view
+    global entities
     runAndReadWrap("pool.writegraph %s"%sot_graph_file)        
+    entities_str = deque(runAndReadWrap("pool.list %s"%sot_graph_file).split())
 
-    time.sleep(0.1)
+    entities = list()
+
+
+    while len(entities) > 0:
+        aname = entities_str.popleft()
+        atype = entities_str.popleft()
+        new_e = Entity(aname,atype)
+        entities.append(new_e)
+
+    for ent in entities:
+        en_list_store.append(str(ent)) 
+
+
+    en_tree_view.set_model(en_list_store)
 
     s = open(sot_graph_file).read()
     s = s.replace("/%s"%graph_name,graph_name)
@@ -41,7 +80,7 @@ def get_graph_and_fix():
 
 # redefine reload function
 def reload_modified(self):
-    get_graph_and_fix()
+    fetch_info_and_graph()
     if self.openfilename is not None:
         try:
             fp = file(self.openfilename, 'rt')
@@ -114,6 +153,8 @@ def dwindow_init(self):
 
     vbox_coshell = gtk.VBox()
     table_coshell_selection.attach(vbox_coshell,0,1,0,1)
+    hbox_sel = gtk.HBox(False,0)
+    table_coshell_selection.attach(hbox_sel,0,1,1,2)
 
 
     ############### GRAPH ###################
@@ -140,18 +181,27 @@ def dwindow_init(self):
     frame1.add(self.coshell_response)
     sw.add_with_viewport(frame1)
     vbox_coshell.pack_start(sw,True,True,0)
-    
-    self.set_focus(self.widget)
 
+
+    ## signal selection
+    label1 = gtk.Label('Ent goes here')
+    label2 = gtk.Label('Sig goes here')
+
+    global en_tree_view
+    
+    hbox_sel.pack_start(en_tree_view)
+#    hbox_sel.pack_start(label2)
+    
+
+    self.set_focus(self.widget)
     self.show_all()
+
 
 def coshell_entry_callback(self, widget, entry):
     entry_text = entry.get_text()
     self.coshell_response.set_text(runAndReadWrap(entry_text))
-    if re.search(r"new|plug|unplug|push|pop",entry_text):
-        self.set_focus(self.widget)
+    if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
         self.widget.reload()
-
 
 
 DotWindow.__init__ = dwindow_init
@@ -177,7 +227,7 @@ def main():
     win.connect('destroy', gtk.main_quit)
     win.set_filter(options.filter)
 
-    get_graph_and_fix()
+    fetch_info_and_graph()
     
     win.open_file(sot_graph_file)
 
