@@ -86,7 +86,9 @@ rendererText = gtk.CellRendererText()
 sig_column1 = gtk.TreeViewColumn("Sig", rendererText, text=1)
 sig_column2 = gtk.TreeViewColumn("I/O", rendererText, text=2)
 sig_column3 = gtk.TreeViewColumn("Type", rendererText, text=3)
-sig_column1.set_sort_column_id(0)    
+sig_column1.set_sort_column_id(1)    
+sig_column2.set_sort_column_id(2)    
+sig_column3.set_sort_column_id(3)    
 sig_tree_view.append_column(sig_column1)
 sig_tree_view.append_column(sig_column2)
 sig_tree_view.append_column(sig_column3)
@@ -202,7 +204,7 @@ def dwindow_init(self):
     hbox1.pack_start(coshell_entry,True,True,0)
     vbox_coshell.pack_start(hbox1,False,False,0)
     coshell_entry.connect\
-        ("activate", coshell_entry_callback, coshell_entry)
+        ("activate", self.coshell_entry_callback, coshell_entry)
 
     ## scrolled windows
 
@@ -213,6 +215,8 @@ def dwindow_init(self):
     coshell_response.set_editable(False)
 #    coshell_response.set_justify(gtk.JUSTIFY_LEFT)
 #    coshell_response.set_line_wrap(True)
+    coshell_response.set_wrap_mode(True)
+
     frame1.add(coshell_response)
     sw.add_with_viewport(frame1)
     vbox_coshell.pack_start(sw,True,True,0)
@@ -244,9 +248,73 @@ def coshell_entry_callback(self, widget, entry):
     if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
         self.widget.reload()
 
+def dotwin_on_area_button_release(self, area, event):
+    self.drag_action.on_button_release(event)
+    self.drag_action = NullAction(self)
+    if event.button == 1 and self.is_click(event):
+        x, y = int(event.x), int(event.y)
+        url = self.get_url(x, y)
+        if url is not None:
+            self.emit('clicked', unicode(url.url), event)
+        else:
+            jump = self.get_jump(x, y)
+            if jump is not None:
+                clicked_item = jump.item
+                mouse_click_action(clicked_item)
+#                self.animate_to(jump.x, jump.y)
+        return True
+
+    if event.button == 1 or event.button == 2:
+        return True
+    return False
+
+def mouse_click_action(item):
+    str_list = list()
+
+    for shape in item.shapes:
+        if isinstance(shape,TextShape):
+            str_list.append(shape.t)
+
+    entity_name = None
+    sig_name = None
+    if isinstance(item,Node):
+        if len(str_list)!=1:
+            return
+        entity_name = str_list[0]
+
+    elif isinstance(item,Edge):
+        src = item.src
+        for shape in src.shapes:
+            if isinstance(shape,TextShape):
+                entity_name = shape.t
+                break
+        sig_name = str_list[1]
+        print sig_name
+
+    if entity_name == None:
+        return
+    iter = en_model.get_iter_first()    
+    while en_model[iter][0] != entity_name:
+        iter = en_model.iter_next(iter)
+    en_selection = en_tree_view.get_selection()
+    en_selection.select_iter(iter)
+    tree_view_sel_callback(en_tree_view)
+
+    if sig_name == None:
+        return
+
+    iter = sig_model.get_iter_first()    
+    while sig_model[iter][1] != sig_name:
+        iter = sig_model.iter_next(iter)
+    sig_selection = sig_tree_view.get_selection()
+    sig_selection.select_iter(iter)
+    tree_view_sel_callback(sig_tree_view)
+            
+    return
 
 DotWindow.__init__ = dwindow_init
 DotWindow.coshell_entry_callback = coshell_entry_callback
+DotWidget.on_area_button_release = dotwin_on_area_button_release
 
 def main():
     import optparse
