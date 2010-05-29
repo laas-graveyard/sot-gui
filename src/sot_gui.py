@@ -11,6 +11,9 @@ import os,re
 from corba_wrapper import runAndReadWrap
 import time
 from collections import deque
+
+coshell_entry = coshell_response = None
+
 DotWindow.ui = '''
     <ui>
         <toolbar name="ToolBar">
@@ -25,19 +28,69 @@ DotWindow.ui = '''
     </ui>
     '''
 
+def tree_view_sel_callback(treeview):
+    global coshell_entry, coshell_response
+    if treeview == en_tree_view:
+        (model, iter) = treeview.get_selection().get_selected()
+        row = model[iter]
+        cmd = '%s.signals'%row[0]
+        list_signals = runAndReadWrap(cmd)
+        coshell_entry.set_text(cmd)
+        coshell_response.get_buffer().set_text(list_signals)
+        lines = list_signals.splitlines()
+        pattern = re.compile(r".*(input|output)\((\w+)\)::(\w+)*")
+        sig_model.clear()
+        for line in lines:
+            m = pattern.match(line)
+            if m:
+                ent = row[0]
+                io  = m.group(1)
+                if io == "input":
+                    io = "I"
+                else:
+                    io = "O"
+                type= m.group(2)
+                sig = m.group(3)
+                sig_model.append([ent,sig,io,type])
+                del ent,sig,io,type
+    elif treeview == sig_tree_view:
+        (model, iter) = treeview.get_selection().get_selected()
+        row = model[iter]
+        ent = row[0]
+        sig = row[1]
+        cmd = 'get %s.%s'%(ent,sig)        
+        sig_val = runAndReadWrap(cmd)
+        coshell_entry.set_text(cmd)
+        coshell_response.get_buffer().set_text(sig_val)
+        del ent,sig, cmd
+
+
 graph_name = "sotgraph"
 sot_graph_file = "/tmp/sotgraph.dot"
-entities = list()
+
 en_model = gtk.ListStore(str,str)
 en_tree_view = gtk.TreeView(en_model)
 rendererText = gtk.CellRendererText()
-
 en_column1 = gtk.TreeViewColumn("Entities", rendererText, text=0)
 en_column2 = gtk.TreeViewColumn("Type", rendererText, text=1)
 en_column1.set_sort_column_id(0)    
+en_column2.set_sort_column_id(1)    
 en_tree_view.append_column(en_column1)
 en_tree_view.append_column(en_column2)
+en_tree_view.connect('cursor-changed',tree_view_sel_callback)
 
+
+sig_model = gtk.ListStore(str,str,str,str) # entity,sig_name,I/O, type
+sig_tree_view = gtk.TreeView(sig_model)
+rendererText = gtk.CellRendererText()
+sig_column1 = gtk.TreeViewColumn("Sig", rendererText, text=1)
+sig_column2 = gtk.TreeViewColumn("I/O", rendererText, text=2)
+sig_column3 = gtk.TreeViewColumn("Type", rendererText, text=3)
+sig_column1.set_sort_column_id(0)    
+sig_tree_view.append_column(sig_column1)
+sig_tree_view.append_column(sig_column2)
+sig_tree_view.append_column(sig_column3)
+sig_tree_view.connect('cursor-changed',tree_view_sel_callback)
 
 def fetch_info_and_graph():
     global en_model,en_tree_view
@@ -128,13 +181,8 @@ def dwindow_init(self):
     vbox_graph = gtk.VBox()
     table.attach(vbox_graph,0,2,0,1)
 
-    table_coshell_selection = gtk.Table(rows=2, columns=1, homogeneous=True)
+    table_coshell_selection = gtk.Table(rows=2, columns=2, homogeneous=True)
     table.attach(table_coshell_selection,2,3,0,1)
-
-    vbox_coshell = gtk.VBox()
-    table_coshell_selection.attach(vbox_coshell,0,1,0,1)
-    hbox_sel = gtk.HBox(False,0)
-    table_coshell_selection.attach(hbox_sel,0,1,1,2)
 
 
     ############### GRAPH ###################
@@ -142,25 +190,30 @@ def dwindow_init(self):
 
     
     ############# COSHELL ######################
+    global coshell_entry, coshell_response
+    
+    vbox_coshell = gtk.VBox()
+    table_coshell_selection.attach(vbox_coshell,0,2,0,1)
     
     hbox1 = gtk.HBox(False,0)
     label = gtk.Label("~>")
     hbox1.pack_start(label,False,False,0)
-    self.coshell_entry = gtk.Entry(max=50)
-    hbox1.pack_start(self.coshell_entry,True,True,0)
+    coshell_entry = gtk.Entry(max=50)
+    hbox1.pack_start(coshell_entry,True,True,0)
     vbox_coshell.pack_start(hbox1,False,False,0)
-    self.coshell_entry.connect\
-        ("activate", self.coshell_entry_callback, self.coshell_entry)
+    coshell_entry.connect\
+        ("activate", coshell_entry_callback, coshell_entry)
 
     ## scrolled windows
 
     sw = gtk.ScrolledWindow()
     sw.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
     frame1 = gtk.Frame("coshell response")
-    self.coshell_response = gtk.Label("")
-    self.coshell_response.set_justify(gtk.JUSTIFY_LEFT)
-    self.coshell_response.set_line_wrap(True)
-    frame1.add(self.coshell_response)
+    coshell_response = gtk.TextView()
+    coshell_response.set_editable(False)
+#    coshell_response.set_justify(gtk.JUSTIFY_LEFT)
+#    coshell_response.set_line_wrap(True)
+    frame1.add(coshell_response)
     sw.add_with_viewport(frame1)
     vbox_coshell.pack_start(sw,True,True,0)
 
@@ -169,19 +222,25 @@ def dwindow_init(self):
     label1 = gtk.Label('Ent goes here')
     label2 = gtk.Label('Sig goes here')
 
-    global en_tree_view    
+    global en_tree_view, sig_tree_view
     sw2 = gtk.ScrolledWindow()
     sw2.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
     sw2.add_with_viewport(en_tree_view)
-    hbox_sel.pack_start(sw2)
+    table_coshell_selection.attach(sw2,0,1,1,2)
+
+    sw3 = gtk.ScrolledWindow()
+    sw3.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
+    sw3.add_with_viewport(sig_tree_view)
+    table_coshell_selection.attach(sw3,1,2,1,2)
 
     self.set_focus(self.widget)
     self.show_all()
 
 
 def coshell_entry_callback(self, widget, entry):
+    global coshell_response
     entry_text = entry.get_text()
-    self.coshell_response.set_text(runAndReadWrap(entry_text))
+    coshell_response.get_buffer().set_text(runAndReadWrap(entry_text))
     if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
         self.widget.reload()
 
