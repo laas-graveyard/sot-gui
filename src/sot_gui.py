@@ -196,29 +196,68 @@ def dwindow_init(self):
     
     vbox_coshell = gtk.VBox()
     table_coshell_selection.attach(vbox_coshell,0,2,0,1)
-    
+
     hbox1 = gtk.HBox(False,0)
     label = gtk.Label("~>")
     hbox1.pack_start(label,False,False,0)
-    coshell_entry = gtk.Entry(max=50)
+    coshell_entry = gtk.Entry(max=1000)
     hbox1.pack_start(coshell_entry,True,True,0)
-    vbox_coshell.pack_start(hbox1,False,False,0)
+
+    hbox2 = gtk.HBox(False,0)
+    coshell_entry_checkbutton = gtk.CheckButton("each")
+    hbox1.pack_start(coshell_entry_checkbutton,False,False,0)
+    coshell_entry_period = gtk.Entry(max=10)
+    coshell_entry_period.set_width_chars(2)
+    hbox1.pack_start(coshell_entry_period,False,False,0)
+    coshell_entry_period_label = gtk.Label("s")
+    hbox1.pack_start(coshell_entry_period_label,False,False,0)
+
     coshell_entry.connect\
-        ("activate", self.coshell_entry_callback, coshell_entry)
+        ("activate", self.coshell_entry_callback)
+    vbox_coshell.pack_start(hbox1,False,False,0)    
+    vbox_coshell.pack_start(hbox2,False,False,0)    
+
 
     ## scrolled windows
 
     sw = gtk.ScrolledWindow()
     sw.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
-    frame1 = gtk.Frame("coshell response")
     coshell_response = gtk.TextView()
     coshell_response.set_editable(False)
-#    coshell_response.set_justify(gtk.JUSTIFY_LEFT)
-#    coshell_response.set_line_wrap(True)
-    coshell_response.set_wrap_mode(True)
+    cr_hbox = gtk.HBox(False,0)
+#    cr_label = gtk.Label("coshell output")
+#    cr_vbox.pack_start(cr_label,False,False,0)
 
-    frame1.add(coshell_response)
-    sw.add_with_viewport(frame1)
+    def word_wrap_cb(widget):
+        if widget.get_active()==0:
+            coshell_response.set_wrap_mode(False)
+        else:
+            coshell_response.set_wrap_mode(True)
+
+    def mat_disp_cb(widget):
+        if widget.get_active()==0:
+            runAndReadWrap('dispmat simple')
+            self.coshell_entry_callback(coshell_entry)
+        else:
+            runAndReadWrap('dispmat matlab')
+            self.coshell_entry_callback(coshell_entry)
+
+    disp_opt_label = gtk.Label("Display options  ")
+    cr_hbox.pack_start(disp_opt_label,False,False,0)
+
+    word_wrap_button = gtk.CheckButton("Word wrap")
+    cr_hbox.pack_start(word_wrap_button,False,False,0)
+    word_wrap_button.connect("toggled",word_wrap_cb)
+
+    mat_disp_button = gtk.CheckButton("Matlab matrix")
+    cr_hbox.pack_start(mat_disp_button,False,False,0)
+    mat_disp_button.connect("toggled",mat_disp_cb)
+    mat_disp_button.set_active(True)
+
+    vbox_coshell.pack_start(cr_hbox,False,False,0)
+    coshell_response.set_wrap_mode(False)
+
+    sw.add_with_viewport(coshell_response)
     vbox_coshell.pack_start(sw,True,True,0)
 
 
@@ -241,9 +280,9 @@ def dwindow_init(self):
     self.show_all()
 
 
-def coshell_entry_callback(self, widget, entry):
+def coshell_entry_callback(self, widget):
     global coshell_response
-    entry_text = entry.get_text()
+    entry_text = widget.get_text()
     coshell_response.get_buffer().set_text(runAndReadWrap(entry_text))
     if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
         self.widget.reload()
@@ -259,8 +298,7 @@ def dotwin_on_area_button_release(self, area, event):
         else:
             jump = self.get_jump(x, y)
             if jump is not None:
-                clicked_item = jump.item
-                mouse_click_action(clicked_item)
+                mouse_click_action(jump)
 #                self.animate_to(jump.x, jump.y)
         return True
 
@@ -268,7 +306,8 @@ def dotwin_on_area_button_release(self, area, event):
         return True
     return False
 
-def mouse_click_action(item):
+def mouse_click_action(jump):
+    item = jump.item
     str_list = list()
 
     for shape in item.shapes:
@@ -283,12 +322,24 @@ def mouse_click_action(item):
         entity_name = str_list[0]
 
     elif isinstance(item,Edge):
-        src = item.src
-        for shape in src.shapes:
-            if isinstance(shape,TextShape):
-                entity_name = shape.t
-                break
-        sig_name = str_list[1]
+        hls = jump.highlight;
+        for hl in hls:
+            if hl == item.src:      
+                for shape in item.src.shapes:
+                    if isinstance(shape,TextShape):
+                        entity_name = shape.t
+                        break
+                if len(str_list) >=2 :
+                    sig_name = str_list[1]
+
+            elif hl == item.dst:      
+                for shape in item.dst.shapes:
+                    if isinstance(shape,TextShape):
+                        entity_name = shape.t
+                        break
+                if len(str_list) >=1 :    
+                    sig_name = str_list[0]
+
         print sig_name
 
     if entity_name == None:
