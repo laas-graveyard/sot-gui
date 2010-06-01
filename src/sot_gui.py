@@ -98,7 +98,8 @@ class SotWidget(DotWidget):
             iter = self.sotwin.en_model.iter_next(iter)
         self.sotwin.en_selection = self.sotwin.en_tree_view.get_selection()
         self.sotwin.en_selection.select_iter(iter)
-        self.sotwin.tree_view_sel_callback(self.sotwin.en_tree_view)
+        self.sotwin.coshell_entry.set_text('%s.signals'%entity_name)
+        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
 
         if sig_name == None:
             return
@@ -108,7 +109,8 @@ class SotWidget(DotWidget):
             iter = self.sotwin.sig_model.iter_next(iter)
         self.sotwin.sig_selection = self.sotwin.sig_tree_view.get_selection()
         self.sotwin.sig_selection.select_iter(iter)
-        self.sotwin.tree_view_sel_callback(self.sotwin.sig_tree_view)            
+        self.sotwin.coshell_entry.set_text('get %s.%s'%(entity_name,sig_name))
+        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
         return   
         
     def on_area_button_release(self, area, event):
@@ -406,6 +408,7 @@ class SotWindow(DotWindow):
             self.widget.zoom_to_fit()
 
     def tree_view_sel_callback(self,treeview):
+        ent = sig = io = cmd = io = None
         if treeview == self.en_tree_view:
             (model, iter) = treeview.get_selection().get_selected()
             row = model[iter]
@@ -428,7 +431,7 @@ class SotWindow(DotWindow):
                     type= m.group(2)
                     sig = m.group(3)
                     self.sig_model.append([ent,sig,io,type])
-                    del ent,sig,io,type
+                    del io,type
         elif treeview == self.sig_tree_view:
             (model, iter) = treeview.get_selection().get_selected()
             row = model[iter]
@@ -437,9 +440,25 @@ class SotWindow(DotWindow):
             cmd = 'get %s.%s'%(ent,sig)        
             self.coshell_entry.set_text(cmd)
             self.coshell_entry_callback(self.coshell_entry)
-            del ent,sig, cmd
-
-
+            del cmd
+        
+        # find node and move there
+        if ent == None:
+            return
+        for node in self.widget.graph.nodes:
+            nodeName = None
+            for shape in node.shapes:
+                if isinstance(shape,TextShape):
+                    nodeName = shape.t
+                    break
+            if nodeName !=None and nodeName == ent:                
+                self.widget.animate_to(node.x,node.y)
+                self.widget.highlight = [node]
+                self.widget.queue_draw()
+                return
+        # if node not found, highlight nothing
+        self.widget.hightlight = []
+        
     def runAndRead(self,s):
         try:
             return runAndReadWrap(s)
