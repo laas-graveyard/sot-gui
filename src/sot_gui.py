@@ -12,7 +12,10 @@ from corba_wrapper import runAndReadWrap
 import time
 from collections import deque
 import gobject
- 
+import pygtk
+pygtk.require('2.0')
+import gtk,sys
+
 class SotWidget(DotWidget):
     """
     """
@@ -148,9 +151,9 @@ class SotWindow(DotWindow):
     def __init__(self, ):
         """
         """
-        self.coshell_response_count = 0
+        self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
-        self.cohsell_frame = None
+#        self.coshell_frame = None
         self.en_model = gtk.ListStore(str,str)
         self.en_tree_view = gtk.TreeView(self.en_model)
         rendererText = gtk.CellRendererText()
@@ -177,7 +180,6 @@ class SotWindow(DotWindow):
         self.sig_tree_view.append_column(self.sig_column3)
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
 
-
         gtk.Window.__init__(self)
 
         self.graph = Graph()
@@ -188,9 +190,9 @@ class SotWindow(DotWindow):
         window.set_default_size(512, 512)
 
         table = gtk.Table(rows=1, columns=3, homogeneous=True)
-
-        vbox_all = gtk.VBox()
-        window.add(vbox_all)
+        window.add(table)
+        notebook = gtk.Notebook()
+        table.attach(notebook,0,2,0,1)
 
         ############# GUI #####################
         self.widget = SotWidget(self)
@@ -223,26 +225,65 @@ class SotWindow(DotWindow):
         uimanager.add_ui_from_string(self.ui)
 
         # Create a Toolbar
-        toolbar = uimanager.get_widget('/ToolBar')
-        vbox_all.pack_start(toolbar, False)
-
-        vbox_all.pack_start(table)
         vbox_graph = gtk.VBox()
-        table.attach(vbox_graph,0,2,0,1)
+        toolbar = uimanager.get_widget('/ToolBar')
+        vbox_graph.pack_start(toolbar, False)
+        
+        graph_label = gtk.Label("Graph")
+        notebook.append_page(vbox_graph, graph_label)
 
         table_coshell_selection = gtk.Table(rows=2, columns=2, homogeneous=True)
         table.attach(table_coshell_selection,2,3,0,1)
 
 
-        ############### GRAPH ###################
+        ############### GRAPH ######################
         vbox_graph.pack_start(self.widget)
 
 
+        ############## ROBOTVIEWER #################
+        rv_label = gtk.Label("Robotviewer")
+        vbox_rv = gtk.VBox()
+        int_hbox = gtk.HBox()
+#        int_label = gtk.Label("INSTRUCTION: run xwininfo on `robotviewer` window the and fill in the Window id below")
+        int_label = gtk.Label("Future feature: Embed robotviewer here")
+        int_hbox.pack_start(int_label,False,False,0)
+        vbox_rv.pack_start(int_hbox,False,False,0)
+
+        hbox_winid = gtk.HBox()
+        vbox_rv.pack_start(hbox_winid,False,False,0)
+        label_winid = gtk.Label('Window id:')
+        hbox_winid.pack_start(label_winid,False,False,0)
+        entry_winid = gtk.Entry(20)
+#        hbox_winid.pack_start(entry_winid,False,False,0)
+
+        def plugged_event(widget):
+            print "I (", widget, ") have just had a plug inserted!"
+
+        socket = gtk.Socket()
+        socket.show()
+
+        socket.connect("plug-added", plugged_event)
+        vbox_rv.pack_start(socket,False,False,0)
+
+        def winid_activate_cb(entry):
+            winid = long(entry.get_text(),16)
+            socket.add_id(long(winid))
+            socket.show()
+        entry_winid.connect('activate',winid_activate_cb)
+
+
+        notebook.append_page(vbox_rv, rv_label)
+        
         ############# COSHELL ######################
         vbox_coshell = gtk.VBox()
         table_coshell_selection.attach(vbox_coshell,0,2,0,1)
 
         hbox1 = gtk.HBox(False,0)
+        cr_hbox = gtk.HBox(False,0)
+
+        vbox_coshell.pack_start(cr_hbox,False,False,0)
+        vbox_coshell.pack_start(hbox1,False,False,0)    
+
         label = gtk.Label("~>")
         hbox1.pack_start(label,False,False,0)
         self.coshell_entry = gtk.Entry(max=1000)
@@ -250,7 +291,6 @@ class SotWindow(DotWindow):
         self.coshell_entry.connect\
             ("activate", self.coshell_entry_callback)
 
-        hbox2 = gtk.HBox(False,0)
         coshell_entry_checkbutton = gtk.CheckButton("each")
         hbox1.pack_start(coshell_entry_checkbutton,False,False,0)
         coshell_entry_period = gtk.Entry(max=10)
@@ -258,8 +298,7 @@ class SotWindow(DotWindow):
         hbox1.pack_start(coshell_entry_period,False,False,0)
         coshell_entry_period_label = gtk.Label("s")
         hbox1.pack_start(coshell_entry_period_label,False,False,0)
-        vbox_coshell.pack_start(hbox1,False,False,0)    
-        vbox_coshell.pack_start(hbox2,False,False,0)    
+
         
         def coshell_timeout_update(widget,checkbutton, period_entry):
             try:
@@ -292,7 +331,6 @@ class SotWindow(DotWindow):
         sw.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
         self.coshell_response = gtk.TextView()
         self.coshell_response.set_editable(False)
-        cr_hbox = gtk.HBox(False,0)
 
         def word_wrap_cb(widget):
             if widget.get_active()==0:
@@ -320,7 +358,6 @@ class SotWindow(DotWindow):
         mat_disp_button.connect("toggled",mat_disp_cb)
         mat_disp_button.set_active(True)
 
-        vbox_coshell.pack_start(cr_hbox,False,False,0)
         self.coshell_response.set_wrap_mode(False)
 
         sw.add_with_viewport(self.coshell_response)
