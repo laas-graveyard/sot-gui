@@ -99,8 +99,7 @@ class SotWidget(DotWidget):
             iter = self.sotwin.en_model.iter_next(iter)
         self.sotwin.en_selection = self.sotwin.en_tree_view.get_selection()
         self.sotwin.en_selection.select_iter(iter)
-        self.sotwin.coshell_entry.set_text('%s.signals'%entity_name)
-        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
+        self.sotwin.tree_view_sel_callback(self.sotwin.en_tree_view,False)
 
         if sig_name == None:
             return
@@ -110,8 +109,7 @@ class SotWidget(DotWidget):
             iter = self.sotwin.sig_model.iter_next(iter)
         self.sotwin.sig_selection = self.sotwin.sig_tree_view.get_selection()
         self.sotwin.sig_selection.select_iter(iter)
-        self.sotwin.coshell_entry.set_text('get %s.%s'%(entity_name,sig_name))
-        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
+        self.sotwin.tree_view_sel_callback(self.sotwin.sig_tree_view,False)
         return   
         
     def on_area_button_release(self, area, event):
@@ -418,7 +416,7 @@ class SotWindow(DotWindow):
             self.set_title('StackOfTasks GUI')
             self.widget.zoom_to_fit()
 
-    def tree_view_sel_callback(self,treeview):
+    def tree_view_sel_callback(self,treeview,animate = True):
         ent = sig = io = cmd = io = None
         if treeview == self.en_tree_view:
             (model, iter) = treeview.get_selection().get_selected()
@@ -454,7 +452,7 @@ class SotWindow(DotWindow):
             del cmd
         
         # find node and move there
-        if ent == None:
+        if ent == None or animate!= True:
             return
         for node in self.widget.graph.nodes:
             nodeName = None
