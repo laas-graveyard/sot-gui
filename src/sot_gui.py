@@ -510,7 +510,7 @@ def main():
     
     win.open_file(SotWidget.sot_graph_file)
     win.set_title('Stack Of Tasks GUI')
-    gobject.timeout_add(1000, win.update, SotWidget.sot_graph_file)
+    gobject.timeout_add(30, win.widget.reload)
 
     gtk.main()
 
