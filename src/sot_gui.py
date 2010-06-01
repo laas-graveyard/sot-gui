@@ -127,8 +127,6 @@ def reload_modified(self):
 def on_area_button_press_modified(self,area,event):
     return
 
-DotWidget.reload = reload_modified
-
 
 def dwindow_init(self):
     gtk.Window.__init__(self)
@@ -286,6 +284,7 @@ def coshell_entry_callback(self, widget):
     coshell_response.get_buffer().set_text(runAndReadWrap(entry_text))
     if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
         self.widget.reload()
+    self.set_title('StackOfTask GUI')
 
 def dotwin_on_area_button_release(self, area, event):
     self.drag_action.on_button_release(event)
@@ -363,9 +362,25 @@ def mouse_click_action(jump):
             
     return
 
-DotWindow.__init__ = dwindow_init
+
+def dwin_set_dotcode(self, dotcode, filename='<stdin>'):
+    if self.widget.set_dotcode(dotcode, filename):
+        self.set_title(os.path.basename(filename) + ' - Dot Viewer')
+        self.widget.zoom_to_fit()
+    self.set_title('Stack Of Tasks GUI')
+
+def dwin_set_xdotcode(self, dotcode, filename='<stdin>'):
+    if self.widget.set_xdotcode(xdotcode):
+            self.set_title(os.path.basename(filename) + ' - Dot Viewer')
+            self.widget.zoom_to_fit()
+    self.set_title('Stack Of Tasks GUI')
+
+DotWindow.__init__               = dwindow_init
 DotWindow.coshell_entry_callback = coshell_entry_callback
+DotWidget.reload                 = reload_modified
 DotWidget.on_area_button_release = dotwin_on_area_button_release
+DotWindow.set_dotcode            = dwin_set_dotcode
+DotWindow.set_xdotcode           = dwin_set_xdotcode
 
 def main():
     import optparse
@@ -390,7 +405,7 @@ def main():
     fetch_info_and_graph()
     
     win.open_file(sot_graph_file)
-
+    win.set_title('Stack Of Tasks GUI')
     gobject.timeout_add(1000, win.update, sot_graph_file)
 
     gtk.main()
