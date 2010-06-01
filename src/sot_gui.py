@@ -8,7 +8,7 @@ __version__ = "0.1"
 
 from xdot import *
 import os,re
-from corba_wrapper import runAndReadWrap
+import corba_wrapper
 import time
 from collections import deque
 import gobject
@@ -31,7 +31,8 @@ class SotWidget(DotWidget):
 
     def fetch_info_and_graph(self):
         self.sotwin.runAndRead("pool.writegraph %s"%self.sot_graph_file)        
-        entities_str = deque(self.sotwin.runAndRead("pool.list %s"%self.sot_graph_file).split())
+        entities_str = deque(self.sotwin.runAndRead\
+                                 ("pool.list %s"%self.sot_graph_file).split())
 
         while len(entities_str) > 0:
             aname = entities_str.popleft()
@@ -165,10 +166,13 @@ class SotWindow(DotWindow):
         self.en_column2.set_sort_column_id(1)    
         self.en_tree_view.append_column(self.en_column1)
         self.en_tree_view.append_column(self.en_column2)
+        self.en_tree_view.set_enable_search(True)
+        self.en_tree_view.set_search_column(0)
         self.en_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
 
 
-        self.sig_model = gtk.ListStore(str,str,str,str) # entity,sig_name,I/O, type
+        self.sig_model = gtk.ListStore(str,str,str,str) 
+        # entity,sig_name,I/O, type
         self.sig_tree_view = gtk.TreeView(self.sig_model)
         rendererText = gtk.CellRendererText()
         self.sig_column1 = gtk.TreeViewColumn("Sig", rendererText, text=1)
@@ -180,6 +184,9 @@ class SotWindow(DotWindow):
         self.sig_tree_view.append_column(self.sig_column1)
         self.sig_tree_view.append_column(self.sig_column2)
         self.sig_tree_view.append_column(self.sig_column3)
+        self.sig_tree_view.set_enable_search(True)
+        self.sig_tree_view.set_search_column(1)
+
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
 
         gtk.Window.__init__(self)
@@ -318,14 +325,17 @@ class SotWindow(DotWindow):
                     return True
                 period_ms = int(1000*period)
                 self.coshell_timeout_source_id = gobject.timeout_add\
-                    ( period_ms, self.coshell_entry_callback , self.coshell_entry )                
+                    ( period_ms, self.coshell_entry_callback , \
+                          self.coshell_entry )                
                 return True
 
         coshell_entry_checkbutton.connect('toggled',coshell_timeout_update,\
-                                              coshell_entry_checkbutton,coshell_entry_period)
+                                              coshell_entry_checkbutton,\
+                                              coshell_entry_period)
         
         coshell_entry_period.connect('activate',coshell_timeout_update,\
-                                              coshell_entry_checkbutton,coshell_entry_period)
+                                         coshell_entry_checkbutton,\
+                                         coshell_entry_period)
         
         ## scrolled windows
 
@@ -391,7 +401,8 @@ class SotWindow(DotWindow):
         entry_text = widget.get_text()
         self.coshell_response.get_buffer().set_text(self.runAndRead(entry_text))
         if self.coshell_frame:
-            self.coshell_frame.set_label("coshell response <%d>"%self.coshell_response_count)
+            self.coshell_frame.set_label("coshell response <%d>"\
+                                             %self.coshell_response_count)
         if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
             self.widget.reload()
         self.set_title('StackOfTasks GUI')
@@ -460,11 +471,21 @@ class SotWindow(DotWindow):
         self.widget.hightlight = []
         
     def runAndRead(self,s):
-        try:
-            return runAndReadWrap(s)
-        except:        
-            print "Corba request failed. Is coshell still running?"
-            sys.exit(1)
+        while True:
+            try:
+                result = corba_wrapper.runAndReadWrap(s)
+                break
+            except:        
+                messagedialog = gtk.MessageDialog\
+                    (self, 0, gtk.MESSAGE_ERROR, gtk.BUTTONS_YES_NO,\
+                         "Corba failed. Retry?")
+                response = messagedialog.run()
+                messagedialog.destroy()
+                if response == gtk.RESPONSE_YES:
+                    reload(corba_wrapper)
+                elif response == gtk.RESPONSE_NO:
+                    sys.exit(1)
+        return result
 
 def main():
     import optparse
