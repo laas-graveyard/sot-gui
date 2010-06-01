@@ -11,6 +11,7 @@ import os,re
 from corba_wrapper import runAndReadWrap
 import time
 from collections import deque
+import gobject
  
 class SotWidget(DotWidget):
     """
@@ -146,8 +147,10 @@ class SotWindow(DotWindow):
    
     def __init__(self, ):
         """
-        """ 
-
+        """
+        self.coshell_response_count = 0
+        self.coshell_timeout_source_id = None
+        self.cohsell_frame = None
         self.en_model = gtk.ListStore(str,str)
         self.en_tree_view = gtk.TreeView(self.en_model)
         rendererText = gtk.CellRendererText()
@@ -236,7 +239,6 @@ class SotWindow(DotWindow):
 
 
         ############# COSHELL ######################
-
         vbox_coshell = gtk.VBox()
         table_coshell_selection.attach(vbox_coshell,0,2,0,1)
 
@@ -256,12 +258,34 @@ class SotWindow(DotWindow):
         hbox1.pack_start(coshell_entry_period,False,False,0)
         coshell_entry_period_label = gtk.Label("s")
         hbox1.pack_start(coshell_entry_period_label,False,False,0)
-
-
         vbox_coshell.pack_start(hbox1,False,False,0)    
         vbox_coshell.pack_start(hbox2,False,False,0)    
+        
+        def coshell_timeout_update(widget,checkbutton, period_entry):
+            try:
+                gobject.source_remove(self.coshell_timeout_source_id)
+            except Exception,error:
+                print "Caught exception %s"%error
+            if checkbutton.get_active()==0:
+                return True
+            else:
+                try:
+                    period = float(period_entry.get_text())
+                except:
+                    return True
+                if period < 0:
+                    return True
+                period_ms = int(1000*period)
+                self.coshell_timeout_source_id = gobject.timeout_add\
+                    ( period_ms, self.coshell_entry_callback , self.coshell_entry )                
+                return True
 
-
+        coshell_entry_checkbutton.connect('toggled',coshell_timeout_update,\
+                                              coshell_entry_checkbutton,coshell_entry_period)
+        
+        coshell_entry_period.connect('activate',coshell_timeout_update,\
+                                              coshell_entry_checkbutton,coshell_entry_period)
+        
         ## scrolled windows
 
         sw = gtk.ScrolledWindow()
@@ -300,7 +324,10 @@ class SotWindow(DotWindow):
         self.coshell_response.set_wrap_mode(False)
 
         sw.add_with_viewport(self.coshell_response)
-        vbox_coshell.pack_start(sw,True,True,0)
+        self.coshell_frame = gtk.Frame()        
+        self.coshell_frame.add(sw)
+
+        vbox_coshell.pack_start(self.coshell_frame,True,True,0)
 
 
         ## signal selection
@@ -320,14 +347,16 @@ class SotWindow(DotWindow):
         self.set_focus(self.widget)
         self.show_all()
 
-
-
     def coshell_entry_callback(self, widget):
+        self.coshell_response_count += 1
         entry_text = widget.get_text()
         self.coshell_response.get_buffer().set_text(self.runAndRead(entry_text))
+        if self.coshell_frame:
+            self.coshell_frame.set_label("coshell response <%d>"%self.coshell_response_count)
         if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
             self.widget.reload()
         self.set_title('StackOfTasks GUI')
+        return True
 
     def set_dotcode(self, dotcode, filename='<stdin>'):
          if self.widget.set_dotcode(dotcode, filename):
@@ -339,16 +368,14 @@ class SotWindow(DotWindow):
             self.set_title('StackOfTasks GUI')
             self.widget.zoom_to_fit()
 
-
-
     def tree_view_sel_callback(self,treeview):
         if treeview == self.en_tree_view:
             (model, iter) = treeview.get_selection().get_selected()
             row = model[iter]
             cmd = '%s.signals'%row[0]
-            list_signals = self.runAndRead(cmd)
             self.coshell_entry.set_text(cmd)
-            self.coshell_response.get_buffer().set_text(list_signals)
+            self.coshell_entry_callback(self.coshell_entry)
+            list_signals = self.runAndRead(cmd)
             lines = list_signals.splitlines()
             pattern = re.compile(r".*(input|output)\((\w+)\)::(\w+)*")
             self.sig_model.clear()
@@ -371,9 +398,8 @@ class SotWindow(DotWindow):
             ent = row[0]
             sig = row[1]
             cmd = 'get %s.%s'%(ent,sig)        
-            sig_val = self.runAndRead(cmd)
             self.coshell_entry.set_text(cmd)
-            self.coshell_response.get_buffer().set_text(sig_val)
+            self.coshell_entry_callback(self.coshell_entry)
             del ent,sig, cmd
 
 
@@ -386,8 +412,6 @@ class SotWindow(DotWindow):
 
 def main():
     import optparse
-
-
     parser = optparse.OptionParser(
         usage='\n\t%prog [file]',
         version='%%prog %s' % __version__)
