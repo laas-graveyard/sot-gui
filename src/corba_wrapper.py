@@ -5,14 +5,14 @@
 # Authors Duong Dang
 
 import getopt,sys, warnings, imp, os, imp
-path = os.path.dirname(__file__)
-sys.path.append(path+'/corba')
-del path
 
+corba_path = os.path.dirname(os.path.abspath(__file__)) + '/corba'
+sys.path = [corba_path] + sys.path
 # Import the CORBA module
 from omniORB import CORBA
 
 # Import the stubs for the CosNaming and hppCorbaServer modules
+
 import hppCorbaServer
 import CosNaming
 
