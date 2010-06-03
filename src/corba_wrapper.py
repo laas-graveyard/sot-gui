@@ -45,6 +45,16 @@ if req_obj is None:
     print "Object reference is not an Example::Echo"
     sys.exit(1)
 
+
+def get_HRP_pos():
+    """
+    """
+    return req_obj.readVector("OpenHRP.state")
+
+def get_wst():
+    return req_obj.readVector("dyn.ffposition")
+
+
 # Invoke the echoString operation
 
 def runAndReadWrap(cmd_str):
