@@ -15,7 +15,7 @@ import gobject
 import pygtk
 pygtk.require('2.0')
 import gtk,sys
-
+from rvwidget import RvWidget
 class SotWidget(DotWidget):
     """
     """
@@ -248,38 +248,14 @@ class SotWindow(DotWindow):
 
 
         ############## ROBOTVIEWER #################
-        rv_label = gtk.Label("Robotviewer")
         vbox_rv = gtk.VBox()
-        int_hbox = gtk.HBox()
-#        int_label = gtk.Label("INSTRUCTION: run xwininfo on `robotviewer` window the and fill in the Window id below")
-        int_label = gtk.Label("Future feature: Embed robotviewer here")
-        int_hbox.pack_start(int_label,False,False,0)
-        vbox_rv.pack_start(int_hbox,False,False,0)
-
-        hbox_winid = gtk.HBox()
-        vbox_rv.pack_start(hbox_winid,False,False,0)
-        label_winid = gtk.Label('Window id:')
-        hbox_winid.pack_start(label_winid,False,False,0)
-        entry_winid = gtk.Entry(20)
-#        hbox_winid.pack_start(entry_winid,False,False,0)
-
-        def plugged_event(widget):
-            print "I (", widget, ") have just had a plug inserted!"
-
-        socket = gtk.Socket()
-        socket.show()
-
-        socket.connect("plug-added", plugged_event)
-        vbox_rv.pack_start(socket,False,False,0)
-
-        def winid_activate_cb(entry):
-            winid = long(entry.get_text(),16)
-            socket.add_id(long(winid))
-            socket.show()
-        entry_winid.connect('activate',winid_activate_cb)
-
-
+        rv_label = gtk.Label("Robotviewer")
         notebook.append_page(vbox_rv, rv_label)
+        vbox_rv.show()
+
+        rvwidget = RvWidget()
+        vbox_rv.pack_start(rvwidget)
+        rvwidget.show()
         
         ############# COSHELL ######################
         vbox_coshell = gtk.VBox()
@@ -393,6 +369,9 @@ class SotWindow(DotWindow):
 
         self.set_focus(self.widget)
         self.show_all()
+        notebook.set_current_page(1)
+        rvwidget.finalInit()
+
 
     def coshell_entry_callback(self, widget):
         self.coshell_response_count += 1
