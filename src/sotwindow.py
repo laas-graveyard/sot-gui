@@ -252,49 +252,31 @@ class SotWindow(DotWindow):
         rv_label = gtk.Label("Robotviewer")
         notebook.append_page(vbox_rv, rv_label)
         vbox_rv.show()
-        hbox_rv_parent = gtk.HBox(False,0)
-        hbox_rv = gtk.HBox(False,0)
-        hbox_rv.set_spacing(0)
-        hbox_rv.pack_start(gtk.Label('Increment (Simu Robot only)'))
-        incr_entry = gtk.Entry(max=10)
-        incr_entry.set_width_chars(2)
-        hbox_rv.pack_start(incr_entry)
-        check_button_rv = gtk.CheckButton('each')
-        hbox_rv.pack_start(check_button_rv)
-        rv_period = gtk.Entry(max=10)
-        rv_period.set_width_chars(2)
-        hbox_rv.pack_start(rv_period)
-        hbox_rv.pack_start(gtk.Label('s'))
-        hbox_rv_parent.pack_start(hbox_rv,False,False,0)
-        vbox_rv.pack_start(hbox_rv_parent,False,False,0)
+        hbox1_rv = gtk.HBox(False,0)
+        hbox2_rv = gtk.HBox(False,0)
+        hbox2_rv.pack_start(hbox1_rv,False,False,0)
+        vbox_rv.pack_start(hbox2_rv,False,False,0)
+        rv_incr_button = gtk.CheckButton("Integrate")
+        hbox1_rv.pack_start(rv_incr_button,False,False,0)
 
-        self.rv_incr_source_id = None
-        def rv_incr_cb(widget,button,entry1,entry2):
-            try:
-                gobject.source_remove(self.rv_incr_source_id)
-            except Exception,error:
-                print "Caught exception %s"%error
-            if button.get_active()==0:
+        self.rv_incr_cb_srcid = None
+        self.rv_cnt = 0
+        def rv_incr_cb():
+            self.rv_cnt += 1
+            print "inc %d"%self.rv_cnt
+
+        def rv_incr_checkbutton_cb(button):
+            if self.rv_incr_cb_srcid:
+                gobject.source_remove(self.rv_incr_cb_srcid)
+                self.rv_incr_cb_srcid = None
+
+            if checkbutton.get_active()==0:
                 return True
             else:
-                try:
-                    incr = float(entry1.get_text())
-                    period  = float(entry2.get_text())
-                except:
-                    return True
+                self.rv_incr_cb_srcid = gobject.add_id(20,rv_incr_cb)
 
-                if period < 0:
-                    return True
-
-                period_ms = int(1000*period)
-                self.rv_incr_source_id = gobject.timeout_add\
-                    ( period_ms, self.runAndRead , "OpenHRP.inc %f"%incr )                
-                return True
-
-        check_button_rv.connect("toggled" , rv_incr_cb,check_button_rv,rv_period,incr_entry)
-        rv_period.connect      ("activate", rv_incr_cb,check_button_rv,rv_period,incr_entry)
-        incr_entry.connect     ("activate", rv_incr_cb,check_button_rv,rv_period,incr_entry)
-
+            return True
+        rv_incr_button.connect("toggled",rv_incr_checkbutton_cb)
         rvwidget = RvWidget()
         vbox_rv.pack_start(rvwidget)
         rvwidget.show()
