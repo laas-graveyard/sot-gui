@@ -15,7 +15,21 @@ import gobject
 import pygtk
 pygtk.require('2.0')
 import gtk,sys
-from rvwidget import RvWidget
+from rvwidget import *
+
+class Setting(object):
+    """
+    """
+    
+    def __init__(self, ):
+        """
+        """        
+        self.simu_dt = 0.02 # integration interval in s
+        self.hrp_rvname = 'hrp'
+        self.hrp_simuName = 'OpenHRP'
+
+
+
 class SotWidget(DotWidget):
     """
     """
@@ -39,6 +53,8 @@ class SotWidget(DotWidget):
             atype = entities_str.popleft()
             if aname not in [ row[0] for row in self.sotwin.en_model ]:
                 self.sotwin.en_model.append([aname,atype])
+            if aname=='OpenHRP':
+                self.sotwin.rvwidget.robotType = atype
 
         s = open(self.sot_graph_file).read()
         s = s.replace("/%s"%self.graph_name,self.graph_name)
@@ -152,6 +168,7 @@ class SotWindow(DotWindow):
     def __init__(self, ):
         """
         """
+        self.setting = Setting()
         self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
 #        self.coshell_frame = None
@@ -256,30 +273,56 @@ class SotWindow(DotWindow):
         hbox2_rv = gtk.HBox(False,0)
         hbox2_rv.pack_start(hbox1_rv,False,False,0)
         vbox_rv.pack_start(hbox2_rv,False,False,0)
-        rv_incr_button = gtk.CheckButton("Integrate")
+        rv_incr_button = gtk.CheckButton("Simulate")
         hbox1_rv.pack_start(rv_incr_button,False,False,0)
+
+        reset_button = gtk.Button('Reset Camera')
+        hbox1_rv.pack_start(reset_button,False,False,0)
+
+        def reset_cb(widget):
+            self.rvwidget.camera = Camera()
+
+        reset_button.connect('clicked',reset_cb)
 
         self.rv_incr_cb_srcid = None
         self.rv_cnt = 0
+
         def rv_incr_cb():
             self.rv_cnt += 1
-            print "inc %d"%self.rv_cnt
+#            print "inc %d"%self.rv_cnt
+            cmd = "%s.inc %f"%(self.setting.hrp_simuName, self.setting.simu_dt)
+            self.runAndRead(cmd)
+            return True
 
         def rv_incr_checkbutton_cb(button):
             if self.rv_incr_cb_srcid:
                 gobject.source_remove(self.rv_incr_cb_srcid)
                 self.rv_incr_cb_srcid = None
 
-            if checkbutton.get_active()==0:
-                return True
-            else:
-                self.rv_incr_cb_srcid = gobject.add_id(20,rv_incr_cb)
-
+            if button.get_active()!=0:
+                for row in self.en_model:
+                    if row[0]=='OpenHRP' and row[1]=='(RobotSimu)':
+                        self.rv_incr_cb_srcid = gobject.timeout_add\
+                            (int(1000*self.setting.simu_dt),rv_incr_cb)
+                        return True
+                warning_msg = gtk.MessageDialog(self, 0, gtk.MESSAGE_WARNING, \
+                                                    gtk.BUTTONS_YES_NO, \
+                                                    "No OpenHRP of type RobotSimu found\n"+\
+                                                "Sending OpenHRP.inc command any way?")
+                
+                response = warning_msg.run()
+                warning_msg.destroy()
+                if response == gtk.RESPONSE_YES:
+                    self.rv_incr_cb_srcid = gobject.timeout_add\
+                        (int(1000*self.setting.simu_dt),rv_incr_cb)
+                elif response == gtk.RESPONSE_NO:
+                    button.set_active(0)
             return True
+
         rv_incr_button.connect("toggled",rv_incr_checkbutton_cb)
-        rvwidget = RvWidget()
-        vbox_rv.pack_start(rvwidget)
-        rvwidget.show()
+        self.rvwidget = RvWidget()
+        vbox_rv.pack_start(self.rvwidget)
+        self.rvwidget.show()
         
         ############# COSHELL ######################
         vbox_coshell = gtk.VBox()
@@ -394,7 +437,8 @@ class SotWindow(DotWindow):
         self.set_focus(self.widget)
         self.show_all()
         notebook.set_current_page(1)
-        rvwidget.finalInit()
+        self.rvwidget.finalInit()
+        notebook.set_current_page(0)
 
 
     def coshell_entry_callback(self, widget):

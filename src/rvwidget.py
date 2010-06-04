@@ -20,6 +20,11 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
     def __init__(self):
         """
         """
+        
+        self.robotType = None
+        self.camera = Camera()
+        self.mouseButtons = [None,None,None]  ## (left,right,middle)
+        self.oldMousePos = None
 
         major, minor = gtk.gdkgl.query_version()
         print "GLX version = %d.%d" % (major, minor)
@@ -61,7 +66,6 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         gtk.gtkgl.DrawingArea.__init__(self, self.glconfig)
         self.set_size_request(300, 300)
 
-        self._camera = Camera()
         self.connect('configure_event', self.reshape)
         self.connect('expose_event', self.DrawGLScene)
 
@@ -86,8 +90,9 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
                         sys.exit(1)
             if len(wst) == 6:                
                 for i in range(len(wst)):
-                    pos[i] = wst[i]                
-                pos[2] += 0.105
+                    pos[i] = wst[i] 
+                if self.robotType == "(RobotSimu)":
+                    pos[2] += 0.105
                 self.updateElementConfig('hrp',pos)  
 
             else:
@@ -104,8 +109,43 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
             return True
 
         self.connect('map_event', map)
+        self.add_events(gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK \
+                            | gtk.gdk.POINTER_MOTION_MASK )
 
+        self.connect("button-press-event", self.button_press_cb)
+        self.connect("button-release-event", self.button_release_cb)
+        self.connect('motion-notify-event', self.motion_notify_cb)
+        self.connect('scroll-event', self.scroll_event_cb)
  
+    def scroll_event_cb(self,widget,event):
+        if event.direction == gtk.gdk.SCROLL_UP:
+            self.camera.moveBackForth(-100)
+
+        if event.direction == gtk.gdk.SCROLL_DOWN:
+            self.camera.moveBackForth(100)
+
+
+    def motion_notify_cb(self,widget,event):
+        if self.oldMousePos == None:
+            self.oldMousePos = (event.x, event.y)
+            return
+        dx = event.x - self.oldMousePos[0]
+        dy = event.y - self.oldMousePos[1]
+
+        if self.mouseButtons[0] == 1:
+            self.camera.rotate(dx,dy)
+        elif self.mouseButtons[2] == 1:
+            self.camera.moveSideway(dx,dy)
+       
+        self.oldMousePos = (event.x, event.y)
+
+    def button_press_cb(self,widget,event):
+        self.mouseButtons[event.button-1] = 1
+        return True
+
+    def button_release_cb(self,widget,event):
+        self.mouseButtons[event.button-1] = None
+        return True
 
     def reshape(self, widget , event):
         # get GLContext and GLDrawable
@@ -116,17 +156,17 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         if not gldrawable.gl_begin(glcontext): return
 
         x, y, width, height = self.get_allocation()
-        updateView(self._camera)
+        updateView(self.camera)
 
         glViewport(0, 0, width, height)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         if width > height:
              w = float(width) / float(height)
-             glFrustum(-w, w, -1.0, 1.0, 2, 10.0)
+             glFrustum(-w/20, w/20, -1.0/20, 1.0/20, .1, 10.0)
         else:
              h = float(height) / float(width)
-             glFrustum(-1.0, 1.0, -h, h, 2, 10.0)
+             glFrustum(-1.0/20, 1.0/20, -h/20, h/20, .1, 10.0)
 
         # # field of view, aspect ratio, near and far
         # This will squash and stretch our objects as the window is resized.
@@ -200,7 +240,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-        updateView(self._camera)
+        updateView(self.camera)
         for item in self._element_dict.items():
             ele = item[1]
 #            print item[0], item[1]._enabled

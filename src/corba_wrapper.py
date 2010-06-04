@@ -54,7 +54,6 @@ def get_HRP_pos():
 def get_wst():
     return req_obj.readVector("dyn.ffposition")
 
-
 # Invoke the echoString operation
 
 def runAndReadWrap(cmd_str):
