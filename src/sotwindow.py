@@ -16,11 +16,11 @@ import pygtk
 pygtk.require('2.0')
 import gtk,sys
 from rvwidget import *
+from termwidget import TermWidget
 
 class Setting(object):
     """
-    """
-    
+    """    
     def __init__(self, ):
         """
         """        
@@ -263,21 +263,43 @@ class SotWindow(DotWindow):
         ############### GRAPH ######################
         vbox_graph.pack_start(self.widget)
 
-
         ############## ROBOTVIEWER #################
         vbox_rv = gtk.VBox()
         rv_label = gtk.Label("Robotviewer")
         notebook.append_page(vbox_rv, rv_label)
         vbox_rv.show()
-        hbox1_rv = gtk.HBox(False,0)
-        hbox2_rv = gtk.HBox(False,0)
-        hbox2_rv.pack_start(hbox1_rv,False,False,0)
-        vbox_rv.pack_start(hbox2_rv,False,False,0)
+        hbox_rv = gtk.HBox(False,0)
+        vbox_rv.pack_start(hbox_rv,False,False,0)
+
+
+        left_align_rv = gtk.Alignment(0,0,0,0)
+        right_align_rv = gtk.Alignment(1,0,0,0)
+        hbox_rv.pack_start(left_align_rv,False,False,0)
+        hbox_rv.pack_start(right_align_rv,True,True ,0)
+
+        left_hbox_rv = gtk.HBox(False,0)
+        right_hbox_rv = gtk.HBox(False,0)
+        left_align_rv.add(left_hbox_rv)
+        right_align_rv.add(right_hbox_rv)
+
+        
+
         rv_incr_button = gtk.CheckButton("Simulate")
-        hbox1_rv.pack_start(rv_incr_button,False,False,0)
+        left_hbox_rv.pack_start(rv_incr_button,False,False,0)
+        left_hbox_rv.pack_start(gtk.HSeparator(),False,True,5)
+        label_time = gtk.Label("Signal Time:")
+        left_hbox_rv.pack_start(label_time,False,False,0)
+
+        def update_time():
+            time = self.runAndRead("signalTime OpenHRP.state")
+            time = time.replace("\n","")
+            label_time.set_text("Signal Time: %s"%time)
+            return True
+        gobject.timeout_add(200,update_time)
+
 
         reset_button = gtk.Button('Reset Camera')
-        hbox1_rv.pack_start(reset_button,False,False,0)
+        right_hbox_rv.pack_start(reset_button,False,False,0)
 
         def reset_cb(widget):
             self.rvwidget.camera = Camera()
@@ -305,10 +327,11 @@ class SotWindow(DotWindow):
                         self.rv_incr_cb_srcid = gobject.timeout_add\
                             (int(1000*self.setting.simu_dt),rv_incr_cb)
                         return True
-                warning_msg = gtk.MessageDialog(self, 0, gtk.MESSAGE_WARNING, \
-                                                    gtk.BUTTONS_YES_NO, \
-                                                    "No OpenHRP of type RobotSimu found\n"+\
-                                                "Sending OpenHRP.inc command any way?")
+                warning_msg = gtk.MessageDialog\
+                    (self, 0, gtk.MESSAGE_WARNING, \
+                         gtk.BUTTONS_YES_NO, \
+                         "No OpenHRP of type RobotSimu found\n"+\
+                         "Sending OpenHRP.inc command any way?")
                 
                 response = warning_msg.run()
                 warning_msg.destroy()
@@ -323,6 +346,12 @@ class SotWindow(DotWindow):
         self.rvwidget = RvWidget()
         vbox_rv.pack_start(self.rvwidget)
         self.rvwidget.show()
+
+        ############# Terminal page #####################
+        term_lab = gtk.Label("Term")
+        term_wid = TermWidget()
+#        notebook.append_page(term_wid,term_lab)
+        
         
         ############# COSHELL ######################
         vbox_coshell = gtk.VBox()
@@ -521,6 +550,7 @@ class SotWindow(DotWindow):
                 result = corba_wrapper.runAndReadWrap(s)
                 break
             except:        
+                self.en_model.clear()
                 messagedialog = gtk.MessageDialog\
                     (self, 0, gtk.MESSAGE_ERROR, gtk.BUTTONS_YES_NO,\
                          "Corba failed. Retry?")

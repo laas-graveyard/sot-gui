@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from distutils.core import setup
 setup(name='sot-gui',
-      version='0.1',
+      version='0.2',
       license='BSD',
       platforms='Linux/MacOSX/Windows',
       description='A GUI tool for StackOfTasks framework',
