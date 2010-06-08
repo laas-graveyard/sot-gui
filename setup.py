@@ -14,6 +14,7 @@ setup(name='sot-gui',
                     'sotgui.corba.hppCorbaServer',\
                     'sotgui.corba.hppCorbaServer__POA'],
       package_dir={'sotgui':'src'},
+      package_data={'sotgui': ['sotwindow.glade']},
       data_files = [('bin',['bin/sot_gui'])]
      )
 

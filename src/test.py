@@ -5,7 +5,7 @@ __author__ = "Duong Dang"
 __version__ = "0.1"
 
 
-from sotgui.sotwindow import *
+from sotwindow import *
 
 def main():
     import optparse
@@ -23,8 +23,11 @@ def main():
         parser.error('incorrect number of arguments')
 
     win = SotWindow()
+
     win.widget.fetch_info_and_graph()
+    
     win.open_file(SotWidget.sot_graph_file)
+
     gobject.timeout_add(30, win.widget.reload)
 
     gtk.main()

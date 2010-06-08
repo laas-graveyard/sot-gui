@@ -3,7 +3,7 @@
 
 __author__ = "Duong Dang"
 
-__version__ = "0.1"
+__version__ = "0.2.1"
 
 
 from xdot import *
@@ -17,6 +17,7 @@ pygtk.require('2.0')
 import gtk,sys
 from rvwidget import *
 from termwidget import TermWidget
+import gtk.glade
 
 class Setting(object):
     """
@@ -62,7 +63,7 @@ class SotWidget(DotWidget):
         f.write(s)
         f.close()
 
-    def reload(self):
+    def reload(self,widget):
         self.fetch_info_and_graph()
         if self.openfilename is not None:
             try:
@@ -149,7 +150,7 @@ class SotWidget(DotWidget):
     
 
 
-class SotWindow(DotWindow):
+class SotWindow(object):
     """
     """
     ui = '''
@@ -169,26 +170,28 @@ class SotWindow(DotWindow):
         """
         """
         self.setting = Setting()
+        src_path = os.path.dirname(os.path.abspath(__file__))
+        gladefile = src_path + "/sotwindow.glade"
+        builder = gtk.Builder()
+        builder.add_from_file(gladefile)
+        window = builder.get_object("window")        
+        window.show()
+        self.win = window
+        
+        self.coshell_response_cnt_label = builder.get_object("coshell_response_cnt_label")
         self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
 #        self.coshell_frame = None
+
         self.en_model = gtk.ListStore(str,str)
-        self.en_tree_view = gtk.TreeView(self.en_model)
         rendererText = gtk.CellRendererText()
         self.en_column1 = gtk.TreeViewColumn("Entities", rendererText, text=0)
         self.en_column2 = gtk.TreeViewColumn("Type", rendererText, text=1)
         self.en_column1.set_sort_column_id(0)    
         self.en_column2.set_sort_column_id(1)    
-        self.en_tree_view.append_column(self.en_column1)
-        self.en_tree_view.append_column(self.en_column2)
-        self.en_tree_view.set_enable_search(True)
-        self.en_tree_view.set_search_column(0)
-        self.en_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
-
 
         self.sig_model = gtk.ListStore(str,str,str,str) 
         # entity,sig_name,I/O, type
-        self.sig_tree_view = gtk.TreeView(self.sig_model)
         rendererText = gtk.CellRendererText()
         self.sig_column1 = gtk.TreeViewColumn("Sig", rendererText, text=1)
         self.sig_column2 = gtk.TreeViewColumn("I/O", rendererText, text=2)
@@ -196,223 +199,39 @@ class SotWindow(DotWindow):
         self.sig_column1.set_sort_column_id(1)    
         self.sig_column2.set_sort_column_id(2)    
         self.sig_column3.set_sort_column_id(3)    
+        
+        
+        self.graph = Graph()
+        self.widget = SotWidget(self)
+        vbox_graph = builder.get_object("vbox_graph")
+        vbox_graph.pack_start(self.widget,True,True,0)
+
+        self.coshell_combo_box_entry =  builder.get_object("coshell_combo_box_entry")
+        self.coshell_entry = self.coshell_combo_box_entry.child
+        self.coshell_hist_model = gtk.ListStore(str)
+        self.coshell_combo_box_entry.set_model( self.coshell_hist_model)
+        self.coshell_combo_box_entry.set_text_column(0)
+        self.coshell_entry.connect('activate',self.coshell_entry_callback)
+
+        self.coshell_response =  builder.get_object("coshell_response")
+        self.coshell_frame =  builder.get_object("coshell_frame")
+        
+        self.en_tree_view = builder.get_object("en_tree_view")
+        self.en_tree_view.set_model(self.en_model)
+        self.en_tree_view.append_column(self.en_column1)
+        self.en_tree_view.append_column(self.en_column2)
+        self.en_tree_view.set_enable_search(True)
+        self.en_tree_view.set_search_column(0)
+        self.en_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
+
+        self.sig_tree_view = builder.get_object("sig_tree_view")
+        self.sig_tree_view.set_model(self.sig_model)
         self.sig_tree_view.append_column(self.sig_column1)
         self.sig_tree_view.append_column(self.sig_column2)
-        self.sig_tree_view.append_column(self.sig_column3)
         self.sig_tree_view.set_enable_search(True)
-        self.sig_tree_view.set_search_column(1)
-
+        self.sig_tree_view.set_search_column(0)
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
 
-        gtk.Window.__init__(self)
-
-        self.graph = Graph()
-
-        window = self
-
-        window.set_title('Dot Viewer')
-        window.set_default_size(512, 512)
-
-        table = gtk.Table(rows=1, columns=3, homogeneous=True)
-        window.add(table)
-        notebook = gtk.Notebook()
-        table.attach(notebook,0,2,0,1)
-
-        ############# GUI #####################
-        self.widget = SotWidget(self)
-
-        # Create a UIManager instance
-        uimanager = self.uimanager = gtk.UIManager()
-
-        # Add the accelerator group to the toplevel window
-        accelgroup = uimanager.get_accel_group()
-        window.add_accel_group(accelgroup)
-
-        # Create an ActionGroup
-        actiongroup = gtk.ActionGroup('Actions')
-        self.actiongroup = actiongroup
-
-        # Create actions
-        actiongroup.add_actions((
-            ('Open', gtk.STOCK_OPEN, None, None, None, self.on_open),
-            ('Reload', gtk.STOCK_REFRESH, None, None, None, self.on_reload),
-            ('ZoomIn', gtk.STOCK_ZOOM_IN, None, None, None, self.widget.on_zoom_in),
-            ('ZoomOut', gtk.STOCK_ZOOM_OUT, None, None, None, self.widget.on_zoom_out),
-            ('ZoomFit', gtk.STOCK_ZOOM_FIT, None, None, None, self.widget.on_zoom_fit),
-            ('Zoom100', gtk.STOCK_ZOOM_100, None, None, None, self.widget.on_zoom_100),
-        ))
-
-        # Add the actiongroup to the uimanager
-        uimanager.insert_action_group(actiongroup, 0)
-
-        # Add a UI descrption
-        uimanager.add_ui_from_string(self.ui)
-
-        # Create a Toolbar
-        vbox_graph = gtk.VBox()
-        toolbar = uimanager.get_widget('/ToolBar')
-        vbox_graph.pack_start(toolbar, False)
-        
-        graph_label = gtk.Label("Graph")
-        notebook.append_page(vbox_graph, graph_label)
-
-        table_coshell_selection = gtk.Table(rows=2, columns=2, homogeneous=True)
-        table.attach(table_coshell_selection,2,3,0,1)
-
-
-        ############### GRAPH ######################
-        vbox_graph.pack_start(self.widget)
-
-        ############## ROBOTVIEWER #################
-        vbox_rv = gtk.VBox()
-        rv_label = gtk.Label("Robotviewer")
-        notebook.append_page(vbox_rv, rv_label)
-        vbox_rv.show()
-        hbox_rv = gtk.HBox(False,0)
-        vbox_rv.pack_start(hbox_rv,False,False,0)
-
-
-        left_align_rv = gtk.Alignment(0,0,0,0)
-        right_align_rv = gtk.Alignment(1,0,0,0)
-        hbox_rv.pack_start(left_align_rv,False,False,0)
-        hbox_rv.pack_start(right_align_rv,True,True ,0)
-
-        left_hbox_rv = gtk.HBox(False,0)
-        right_hbox_rv = gtk.HBox(False,0)
-        left_align_rv.add(left_hbox_rv)
-        right_align_rv.add(right_hbox_rv)
-
-        
-
-        rv_incr_button = gtk.CheckButton("Simulate")
-        left_hbox_rv.pack_start(rv_incr_button,False,False,0)
-        left_hbox_rv.pack_start(gtk.HSeparator(),False,True,5)
-        label_time = gtk.Label("Signal Time:")
-        left_hbox_rv.pack_start(label_time,False,False,0)
-
-        def update_time():
-            time = self.runAndRead("signalTime OpenHRP.state")
-            time = time.replace("\n","")
-            label_time.set_text("Signal Time: %s"%time)
-            return True
-        gobject.timeout_add(200,update_time)
-
-
-        reset_button = gtk.Button('Reset Camera')
-        right_hbox_rv.pack_start(reset_button,False,False,0)
-
-        def reset_cb(widget):
-            self.rvwidget.camera = Camera()
-
-        reset_button.connect('clicked',reset_cb)
-
-        self.rv_incr_cb_srcid = None
-        self.rv_cnt = 0
-
-        def rv_incr_cb():
-            self.rv_cnt += 1
-#            print "inc %d"%self.rv_cnt
-            cmd = "%s.inc %f"%(self.setting.hrp_simuName, self.setting.simu_dt)
-            self.runAndRead(cmd)
-            return True
-
-        def rv_incr_checkbutton_cb(button):
-            if self.rv_incr_cb_srcid:
-                gobject.source_remove(self.rv_incr_cb_srcid)
-                self.rv_incr_cb_srcid = None
-
-            if button.get_active()!=0:
-                for row in self.en_model:
-                    if row[0]=='OpenHRP' and row[1]=='(RobotSimu)':
-                        self.rv_incr_cb_srcid = gobject.timeout_add\
-                            (int(1000*self.setting.simu_dt),rv_incr_cb)
-                        return True
-                warning_msg = gtk.MessageDialog\
-                    (self, 0, gtk.MESSAGE_WARNING, \
-                         gtk.BUTTONS_YES_NO, \
-                         "No OpenHRP of type RobotSimu found\n"+\
-                         "Sending OpenHRP.inc command any way?")
-                
-                response = warning_msg.run()
-                warning_msg.destroy()
-                if response == gtk.RESPONSE_YES:
-                    self.rv_incr_cb_srcid = gobject.timeout_add\
-                        (int(1000*self.setting.simu_dt),rv_incr_cb)
-                elif response == gtk.RESPONSE_NO:
-                    button.set_active(0)
-            return True
-
-        rv_incr_button.connect("toggled",rv_incr_checkbutton_cb)
-        self.rvwidget = RvWidget()
-        vbox_rv.pack_start(self.rvwidget)
-        self.rvwidget.show()
-
-        ############# Terminal page #####################
-        term_lab = gtk.Label("Term")
-        term_wid = TermWidget()
-#        notebook.append_page(term_wid,term_lab)
-        
-        
-        ############# COSHELL ######################
-        vbox_coshell = gtk.VBox()
-        table_coshell_selection.attach(vbox_coshell,0,2,0,1)
-
-        hbox1 = gtk.HBox(False,0)
-        cr_hbox = gtk.HBox(False,0)
-
-        vbox_coshell.pack_start(cr_hbox,False,False,0)
-        vbox_coshell.pack_start(hbox1,False,False,0)    
-
-        label = gtk.Label("~>")
-        hbox1.pack_start(label,False,False,0)
-        self.coshell_entry = gtk.Entry(max=1000)
-        hbox1.pack_start(self.coshell_entry,True,True,0)
-        self.coshell_entry.connect\
-            ("activate", self.coshell_entry_callback)
-
-        coshell_entry_checkbutton = gtk.CheckButton("each")
-        hbox1.pack_start(coshell_entry_checkbutton,False,False,0)
-        coshell_entry_period = gtk.Entry(max=10)
-        coshell_entry_period.set_width_chars(2)
-        hbox1.pack_start(coshell_entry_period,False,False,0)
-        coshell_entry_period_label = gtk.Label("s")
-        hbox1.pack_start(coshell_entry_period_label,False,False,0)
-
-        
-        def coshell_timeout_update(widget,checkbutton, period_entry):
-            try:
-                gobject.source_remove(self.coshell_timeout_source_id)
-            except Exception,error:
-                print "Caught exception %s"%error
-            if checkbutton.get_active()==0:
-                return True
-            else:
-                try:
-                    period = float(period_entry.get_text())
-                except:
-                    return True
-                if period < 0:
-                    return True
-                period_ms = int(1000*period)
-                self.coshell_timeout_source_id = gobject.timeout_add\
-                    ( period_ms, self.coshell_entry_callback , \
-                          self.coshell_entry )                
-                return True
-
-        coshell_entry_checkbutton.connect('toggled',coshell_timeout_update,\
-                                              coshell_entry_checkbutton,\
-                                              coshell_entry_period)
-        
-        coshell_entry_period.connect('activate',coshell_timeout_update,\
-                                         coshell_entry_checkbutton,\
-                                         coshell_entry_period)
-        
-        ## scrolled windows
-
-        sw = gtk.ScrolledWindow()
-        sw.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
-        self.coshell_response = gtk.TextView()
-        self.coshell_response.set_editable(False)
 
         def word_wrap_cb(widget):
             if widget.get_active()==0:
@@ -428,68 +247,170 @@ class SotWindow(DotWindow):
                 self.runAndRead('dispmat matlab')
                 self.coshell_entry_callback(self.coshell_entry)
 
-        disp_opt_label = gtk.Label("Display options  ")
-        cr_hbox.pack_start(disp_opt_label,False,False,0)
+        self.rv_cnt = 0
+        def rv_incr_cb():
+            self.rv_cnt += 1
+#            print "inc %d"%self.rv_cnt
+            cmd = "%s.inc %f"%(self.setting.hrp_simuName, self.setting.simu_dt)
+            self.runAndRead(cmd)
+            return True
+        self.rv_incr_cb_srcid = None
+        def simulate_button_toggled_cb(button):
+            if self.rv_incr_cb_srcid:
+                gobject.source_remove(self.rv_incr_cb_srcid)
+                self.rv_incr_cb_srcid = None
 
-        word_wrap_button = gtk.CheckButton("Word wrap")
-        cr_hbox.pack_start(word_wrap_button,False,False,0)
-        word_wrap_button.connect("toggled",word_wrap_cb)
+            if button.get_active()!=0:
+                for row in self.en_model:
+                    if row[0]=='OpenHRP' and row[1]=='(RobotSimu)':
+                        self.rv_incr_cb_srcid = gobject.timeout_add\
+                            (int(1000*self.setting.simu_dt),rv_incr_cb)
+                        return True
+                warning_msg = gtk.MessageDialog\
+                    (self.win, 0, gtk.MESSAGE_WARNING, \
+                         gtk.BUTTONS_YES_NO, \
+                         "No OpenHRP of type RobotSimu found\n"+\
+                         "Sending OpenHRP.inc command any way?")
+                
+                response = warning_msg.run()
+                warning_msg.destroy()
+                if response == gtk.RESPONSE_YES:
+                    self.rv_incr_cb_srcid = gobject.timeout_add\
+                        (int(1000*self.setting.simu_dt),rv_incr_cb)
+                elif response == gtk.RESPONSE_NO:
+                    button.set_active(0)
+            return True
 
-        mat_disp_button = gtk.CheckButton("Matlab matrix")
-        cr_hbox.pack_start(mat_disp_button,False,False,0)
-        mat_disp_button.connect("toggled",mat_disp_cb)
-        mat_disp_button.set_active(True)
+        self.coshell_each_button = builder.get_object("coshell_each_button")
+        self.coshell_period = builder.get_object("coshell_period")
 
-        self.coshell_response.set_wrap_mode(False)
+        self.coshell_timeout_source_id = None
+        def coshell_period_activate_cb(widget):
+            if self.coshell_timeout_source_id:
+                try:
+                    gobject.source_remove(self.coshell_timeout_source_id)
+                except Exception,error:
+                    print "Caught exception %s"%error
 
-        sw.add_with_viewport(self.coshell_response)
-        self.coshell_frame = gtk.Frame()        
-        self.coshell_frame.add(sw)
+            if self.coshell_each_button.get_active()==0:
+                return True
+            else:
+                try:
+                    period = float(self.coshell_period.get_text())
+                except Exception,error:
+                    print "caught exception %s"%str(error)
+                    return True
+                if period < 0:
+                    return True
+                period_ms = int(1000*period)
+                self.coshell_timeout_source_id = gobject.timeout_add\
+                    ( period_ms, self.coshell_entry_callback , \
+                          self.coshell_entry )                
+                return True
 
-        vbox_coshell.pack_start(self.coshell_frame,True,True,0)
+        self.rvwidget = RvWidget()
+        vbox_rv = builder.get_object("vbox_rv")
+        vbox_rv.pack_start(self.rvwidget)
 
+        label_time = builder.get_object("sig_time_lab")
+        def update_time():
+            time = self.runAndRead("signalTime OpenHRP.state")
+            time = time.replace("\n","")
+            label_time.set_text("Signal Time: %s"%time)
+            return True
 
-        ## signal selection
-        label1 = gtk.Label('Ent goes here')
-        label2 = gtk.Label('Sig goes here')
+        gobject.timeout_add(200,update_time)
+        
+        self.cursor_state = None
+        self.help_cursor = gtk.gdk.Cursor(gtk.gdk.QUESTION_ARROW)
+        self.info_cursor = gtk.gdk.Cursor(gtk.gdk.PLUS)
 
-        sw2 = gtk.ScrolledWindow()
-        sw2.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
-        sw2.add_with_viewport(self.en_tree_view)
-        table_coshell_selection.attach(sw2,0,1,1,2)
+        def help_button_clicked_cb(widget):    
+            if self.cursor_state != 'help':
+                widget.window.set_cursor(self.help_cursor)
+                self.cursor_state = 'help'
+            else:
+                widget.window.set_cursor(None)
+                self.cursor_state = None
+            
 
-        sw3 = gtk.ScrolledWindow()
-        sw3.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
-        sw3.add_with_viewport(self.sig_tree_view)
-        table_coshell_selection.attach(sw3,1,2,1,2)
+        def info_button_clicked_cb(widget):
+            if self.cursor_state != 'info':
+                widget.window.set_cursor(self.info_cursor)                
+                self.cursor_state = 'info'
+            else:
+                widget.window.set_cursor(None)
+                self.cursor_state = None
 
-        self.set_focus(self.widget)
-        self.show_all()
+        def signal_button_clicked_cb(widget):
+            widget.window.set_cursor(None)
+            self.cursor_state = None
+
+        def reset_cam_button_clicked_cb(widget):
+            self.rvwidget.camera = Camera()
+
+        action_dict = {"refresh_button_clicked_cb" : self.widget.reload,
+                       "zoomin_button_clicked_cb"  : self.widget.on_zoom_in,
+                       "zoomout_button_clicked_cb" : self.widget.on_zoom_out,
+                       "zoom100_button_clicked_cb" : self.widget.on_zoom_100,
+                       "bestfit_button_clicked_cb" : self.widget.on_zoom_fit,
+                       "gtk_main_quit"             : gtk.main_quit,     
+                       "coshell_entry_changed_cb" : self.coshell_entry_callback,
+                       "wordwrap_button_toggled_cb" : word_wrap_cb,
+                       "matlab_button_toggled_cb" : mat_disp_cb,
+                       "coshell_each_button_toggled_cb"   : coshell_period_activate_cb,
+                       "coshell_period_activate_cb"   : coshell_period_activate_cb,
+                       "simulate_button_toggled_cb"   : simulate_button_toggled_cb,
+                       "help_button_clicked_cb"   : help_button_clicked_cb,
+                       "info_button_clicked_cb"   : info_button_clicked_cb,
+                       "signal_button_clicked_cb"   : signal_button_clicked_cb, 
+                       "reset_cam_button_clicked_cb": reset_cam_button_clicked_cb,
+                       }
+
+        builder.connect_signals(action_dict)
+
+        window.show_all()
+        notebook = builder.get_object("notebook")
         notebook.set_current_page(1)
         self.rvwidget.finalInit()
-        notebook.set_current_page(0)
 
 
     def coshell_entry_callback(self, widget):
         self.coshell_response_count += 1
         entry_text = widget.get_text()
+        hist = [row[0] for row in self.coshell_hist_model]
+        if entry_text not in hist:
+            self.coshell_hist_model.prepend([entry_text])
+
         self.coshell_response.get_buffer().set_text(self.runAndRead(entry_text))
-        if self.coshell_frame:
-            self.coshell_frame.set_label("coshell response <%d>"\
+        if self.coshell_response_cnt_label:
+            self.coshell_response_cnt_label.set_text("coshell response <%d>"\
                                              %self.coshell_response_count)
         if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
-            self.widget.reload()
-        self.set_title('StackOfTasks GUI')
+            self.widget.reload(widget)
         return True
 
+    def open_file(self, filename):
+        try:
+            fp = file(filename, 'rt')
+            self.set_dotcode(fp.read(), filename)
+            fp.close()
+        except IOError, ex:
+            dlg = gtk.MessageDialog(type=gtk.MESSAGE_ERROR,
+                                    message_format=str(ex),
+                                    buttons=gtk.BUTTONS_OK)
+            dlg.set_title('Dot Viewer')
+            dlg.run()
+            dlg.destroy()
+
+
+            
     def set_dotcode(self, dotcode, filename='<stdin>'):
          if self.widget.set_dotcode(dotcode, filename):
-            self.set_title('StackOfTasks GUI')
             self.widget.zoom_to_fit()
 
     def set_xdotcode(self, dotcode, filename='<stdin>'):
          if self.widget.set_xdotcode(dotcode, filename):
-            self.set_title('StackOfTasks GUI')
             self.widget.zoom_to_fit()
 
     def tree_view_sel_callback(self,treeview,animate = True):
@@ -497,10 +418,15 @@ class SotWindow(DotWindow):
         if treeview == self.en_tree_view:
             (model, iter) = treeview.get_selection().get_selected()
             row = model[iter]
-            cmd = '%s.signals'%row[0]
+            if self.cursor_state == 'help':
+                cmd = '%s.help'%row[0]
+            elif self.cursor_state == 'info':
+                cmd = '%s.print'%row[0]
+            else :
+                cmd = '%s.signals'%row[0]
             self.coshell_entry.set_text(cmd)
             self.coshell_entry_callback(self.coshell_entry)
-            list_signals = self.runAndRead(cmd)
+            list_signals = self.runAndRead('%s.signals'%row[0])
             lines = list_signals.splitlines()
             pattern = re.compile(r".*(input|output)\((\w+)\)::(\w+)*")
             self.sig_model.clear()
@@ -522,7 +448,11 @@ class SotWindow(DotWindow):
             row = model[iter]
             ent = row[0]
             sig = row[1]
-            cmd = 'get %s.%s'%(ent,sig)        
+            if self.cursor_state == None:
+                cmd = 'get %s.%s'%(ent,sig)        
+            else:
+                cmd = '%s.signalDep %s'%(ent,sig)        
+
             self.coshell_entry.set_text(cmd)
             self.coshell_entry_callback(self.coshell_entry)
             del cmd
@@ -552,8 +482,8 @@ class SotWindow(DotWindow):
             except:        
                 self.en_model.clear()
                 messagedialog = gtk.MessageDialog\
-                    (self, 0, gtk.MESSAGE_ERROR, gtk.BUTTONS_YES_NO,\
-                         "Corba failed. Retry?")
+                    (self.win, 0, gtk.MESSAGE_ERROR, \
+                         gtk.BUTTONS_YES_NO,"Corba failed. Retry?")
                 response = messagedialog.run()
                 messagedialog.destroy()
                 if response == gtk.RESPONSE_YES:
