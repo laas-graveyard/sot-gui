@@ -21,7 +21,6 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         """
         """
         
-        self.robotType = None
         self.camera = Camera()
         self.mouseButtons = [None,None,None]  ## (left,right,middle)
         self.oldMousePos = None
@@ -88,13 +87,18 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
                         reload(corba_wrapper)
                     elif response == gtk.RESPONSE_NO:
                         sys.exit(1)
+
             if len(wst) == 6:                
                 for i in range(len(wst)):
                     pos[i] = wst[i] 
-                if self.robotType == "(RobotSimu)":
-                    pos[2] += 0.105
-                self.updateElementConfig('hrp',pos)  
+                top_window = self.get_toplevel()
 
+                if hasattr(top_window,'setting'):
+                    if top_window.setting.robotType == "(RobotSimu)":
+                        pos[2] += 0.0
+                    self.updateElementConfig(top_window.setting.hrp_rvname,pos)  
+                print "Warning: top level window has no settings attribute"
+                
             else:
                 print "Warning! wrong dimension of waist_pos, robot not updated"
 

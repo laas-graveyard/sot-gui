@@ -13,3 +13,7 @@ screenshots
 .. image:: ../images/shot2.png
     :width: 1200px
     :align: center
+
+.. image:: ../images/shot3.png
+    :width: 1200px
+    :align: center

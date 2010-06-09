@@ -28,7 +28,7 @@ class Setting(object):
         self.simu_dt = 0.02 # integration interval in s
         self.hrp_rvname = 'hrp'
         self.hrp_simuName = 'OpenHRP'
-
+        self.robotType = None
 
 
 class SotWidget(DotWidget):
@@ -55,7 +55,7 @@ class SotWidget(DotWidget):
             if aname not in [ row[0] for row in self.sotwin.en_model ]:
                 self.sotwin.en_model.append([aname,atype])
             if aname=='OpenHRP':
-                self.sotwin.rvwidget.robotType = atype
+                self.sotwin.setting.robotType = atype
 
         s = open(self.sot_graph_file).read()
         s = s.replace("/%s"%self.graph_name,self.graph_name)
@@ -150,7 +150,7 @@ class SotWidget(DotWidget):
     
 
 
-class SotWindow(object):
+class SotWindow(gtk.Window):
     """
     """
     ui = '''
@@ -166,18 +166,19 @@ class SotWindow(object):
     </ui>
     ''' 
    
-    def __init__(self, ):
+    def __init__(self, options=None,args=None):
         """
         """
+        gtk.Window.__init__(self)
+        self.win = self
         self.setting = Setting()
         src_path = os.path.dirname(os.path.abspath(__file__))
         gladefile = src_path + "/sotwindow.glade"
         builder = gtk.Builder()
         builder.add_from_file(gladefile)
-        window = builder.get_object("window")        
-        window.show()
-        self.win = window
-        
+        window = builder.get_object("window")
+        window.child.reparent(self)
+        self.setting = Setting()
         self.coshell_response_cnt_label = builder.get_object("coshell_response_cnt_label")
         self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
@@ -308,15 +309,20 @@ class SotWindow(object):
                           self.coshell_entry )                
                 return True
 
-        self.rvwidget = RvWidget()
-        vbox_rv = builder.get_object("vbox_rv")
-        vbox_rv.pack_start(self.rvwidget)
+        if options and options.nw:
+            notebook = builder.get_object("notebook")
+            notebook.remove_page(1)
+        else:
+            self.rvwidget = RvWidget()
+            vbox_rv = builder.get_object("vbox_rv")
+            vbox_rv.pack_start(self.rvwidget)
 
         label_time = builder.get_object("sig_time_lab")
+
         def update_time():
-            time = self.runAndRead("signalTime OpenHRP.state")
-            time = time.replace("\n","")
-            label_time.set_text("Signal Time: %s"%time)
+            ticks = int(self.runAndRead("signalTime OpenHRP.state"))
+            time = ticks*0.005
+            label_time.set_text("Signal Time: %3.3f (%d ticks)"%(time,ticks))
             return True
 
         gobject.timeout_add(200,update_time)
@@ -355,7 +361,6 @@ class SotWindow(object):
                        "zoom100_button_clicked_cb" : self.widget.on_zoom_100,
                        "bestfit_button_clicked_cb" : self.widget.on_zoom_fit,
                        "gtk_main_quit"             : gtk.main_quit,     
-                       "coshell_entry_changed_cb" : self.coshell_entry_callback,
                        "wordwrap_button_toggled_cb" : word_wrap_cb,
                        "matlab_button_toggled_cb" : mat_disp_cb,
                        "coshell_each_button_toggled_cb"   : coshell_period_activate_cb,
@@ -369,10 +374,11 @@ class SotWindow(object):
 
         builder.connect_signals(action_dict)
 
-        window.show_all()
-        notebook = builder.get_object("notebook")
-        notebook.set_current_page(1)
-        self.rvwidget.finalInit()
+        self.show_all()
+        if not ( options and options.nw):
+            notebook = builder.get_object("notebook")
+            notebook.set_current_page(1)
+            self.rvwidget.finalInit()
 
 
     def coshell_entry_callback(self, widget):
@@ -479,11 +485,11 @@ class SotWindow(object):
             try:
                 result = corba_wrapper.runAndReadWrap(s)
                 break
-            except:        
+            except Exception,error:        
                 self.en_model.clear()
                 messagedialog = gtk.MessageDialog\
                     (self.win, 0, gtk.MESSAGE_ERROR, \
-                         gtk.BUTTONS_YES_NO,"Corba failed. Retry?")
+                         gtk.BUTTONS_YES_NO,"%s. Retry?"%str(error))
                 response = messagedialog.run()
                 messagedialog.destroy()
                 if response == gtk.RESPONSE_YES:
