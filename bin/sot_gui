@@ -20,7 +20,7 @@ def main():
     parser.add_option(
         '-n', 
         action="store_true", dest="nw",
-        help='Start sot_gui without 3D display of the robot')
+        help='start sot_gui without 3D display of the robot')
 
     (options, args) = parser.parse_args(sys.argv[1:])
     if len(args) > 1:
