@@ -19,13 +19,30 @@ from rvwidget import *
 from termwidget import TermWidget
 import gtk.glade
 
+class TimedMsg(object):
+    """
+    """
+    
+    def __init__(self, time,msg):
+        """
+        
+        Arguments:
+        - `time`:
+        - `msg`:
+        """
+        self._time = time
+        self._msg = msg
+        
+
+
+
 class Setting(object):
     """
     """    
     def __init__(self, ):
         """
         """        
-        self.simu_dt = 0.02 # integration interval in s
+        self.simu_dt = 0.05 # integration interval in s
         self.hrp_rvname = 'hrp'
         self.hrp_simuName = 'OpenHRP'
         self.robotType = None
@@ -45,9 +62,13 @@ class SotWidget(DotWidget):
         self.sotwin = sw
 
     def fetch_info_and_graph(self):
-        self.sotwin.runAndRead("pool.writegraph %s"%self.sot_graph_file)        
-        entities_str = deque(self.sotwin.runAndRead\
-                                 ("pool.list %s"%self.sot_graph_file).split())
+        self.sotwin.runAndRead("pool.writegraph %s"%self.sot_graph_file) 
+
+        return_str = self.sotwin.runAndRead("pool.list %s"%self.sot_graph_file)
+        if not return_str:
+            return
+
+        entities_str = deque(return_str.split())
 
         while len(entities_str) > 0:
             aname = entities_str.popleft()
@@ -174,15 +195,16 @@ class SotWindow(gtk.Window):
         self.setting = Setting()
         src_path = os.path.dirname(os.path.abspath(__file__))
         gladefile = src_path + "/sotwindow.glade"
-        builder = gtk.Builder()
-        builder.add_from_file(gladefile)
-        window = builder.get_object("window")
+        self.builder = gtk.Builder()
+        self.builder.add_from_file(gladefile)
+        window = self.builder.get_object("window")
         window.child.reparent(self)
         self.setting = Setting()
-        self.coshell_response_cnt_label = builder.get_object("coshell_response_cnt_label")
+        self.coshell_response_cnt_label = self.builder.get_object("coshell_response_cnt_label")
+        self.status = self.builder.get_object("status")
+        self.statusicon = self.builder.get_object("statusicon")
         self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
-#        self.coshell_frame = None
 
         self.en_model = gtk.ListStore(str,str)
         rendererText = gtk.CellRendererText()
@@ -200,24 +222,23 @@ class SotWindow(gtk.Window):
         self.sig_column1.set_sort_column_id(1)    
         self.sig_column2.set_sort_column_id(2)    
         self.sig_column3.set_sort_column_id(3)    
-        
-        
+                
         self.graph = Graph()
         self.widget = SotWidget(self)
-        vbox_graph = builder.get_object("vbox_graph")
+        vbox_graph = self.builder.get_object("vbox_graph")
         vbox_graph.pack_start(self.widget,True,True,0)
 
-        self.coshell_combo_box_entry =  builder.get_object("coshell_combo_box_entry")
+        self.coshell_combo_box_entry =  self.builder.get_object("coshell_combo_box_entry")
         self.coshell_entry = self.coshell_combo_box_entry.child
         self.coshell_hist_model = gtk.ListStore(str)
         self.coshell_combo_box_entry.set_model( self.coshell_hist_model)
         self.coshell_combo_box_entry.set_text_column(0)
         self.coshell_entry.connect('activate',self.coshell_entry_callback)
 
-        self.coshell_response =  builder.get_object("coshell_response")
-        self.coshell_frame =  builder.get_object("coshell_frame")
+        self.coshell_response =  self.builder.get_object("coshell_response")
+        self.coshell_frame =  self.builder.get_object("coshell_frame")
         
-        self.en_tree_view = builder.get_object("en_tree_view")
+        self.en_tree_view = self.builder.get_object("en_tree_view")
         self.en_tree_view.set_model(self.en_model)
         self.en_tree_view.append_column(self.en_column1)
         self.en_tree_view.append_column(self.en_column2)
@@ -225,14 +246,17 @@ class SotWindow(gtk.Window):
         self.en_tree_view.set_search_column(0)
         self.en_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
 
-        self.sig_tree_view = builder.get_object("sig_tree_view")
+        self.sig_tree_view = self.builder.get_object("sig_tree_view")
         self.sig_tree_view.set_model(self.sig_model)
         self.sig_tree_view.append_column(self.sig_column1)
         self.sig_tree_view.append_column(self.sig_column2)
         self.sig_tree_view.set_enable_search(True)
         self.sig_tree_view.set_search_column(0)
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
-
+        
+        # warnings and error stuff
+        self.warnings = []
+        self.errors = []
 
         def word_wrap_cb(widget):
             if widget.get_active()==0:
@@ -256,17 +280,18 @@ class SotWindow(gtk.Window):
             self.runAndRead(cmd)
             return True
         self.rv_incr_cb_srcid = None
+
         def simulate_button_toggled_cb(button):
             if self.rv_incr_cb_srcid:
                 gobject.source_remove(self.rv_incr_cb_srcid)
                 self.rv_incr_cb_srcid = None
 
             if button.get_active()!=0:
-                for row in self.en_model:
-                    if row[0]=='OpenHRP' and row[1]=='(RobotSimu)':
-                        self.rv_incr_cb_srcid = gobject.timeout_add\
-                            (int(1000*self.setting.simu_dt),rv_incr_cb)
-                        return True
+                if self.setting.robotType =='(RobotSimu)':
+                    self.rv_incr_cb_srcid = gobject.timeout_add\
+                        (int(1000*self.setting.simu_dt),rv_incr_cb)
+                    return True
+
                 warning_msg = gtk.MessageDialog\
                     (self.win, 0, gtk.MESSAGE_WARNING, \
                          gtk.BUTTONS_YES_NO, \
@@ -282,8 +307,8 @@ class SotWindow(gtk.Window):
                     button.set_active(0)
             return True
 
-        self.coshell_each_button = builder.get_object("coshell_each_button")
-        self.coshell_period = builder.get_object("coshell_period")
+        self.coshell_each_button = self.builder.get_object("coshell_each_button")
+        self.coshell_period = self.builder.get_object("coshell_period")
 
         self.coshell_timeout_source_id = None
         def coshell_period_activate_cb(widget):
@@ -310,22 +335,41 @@ class SotWindow(gtk.Window):
                 return True
 
         if options and options.nw:
-            notebook = builder.get_object("notebook")
+            notebook = self.builder.get_object("notebook")
             notebook.remove_page(1)
         else:
             self.rvwidget = RvWidget()
-            vbox_rv = builder.get_object("vbox_rv")
+            vbox_rv = self.builder.get_object("vbox_rv")
             vbox_rv.pack_start(self.rvwidget)
 
-        label_time = builder.get_object("sig_time_lab")
+        label_time = self.builder.get_object("sig_time_lab")
 
-        def update_time():
-            ticks = int(self.runAndRead("signalTime OpenHRP.state"))
-            time = ticks*0.005
-            label_time.set_text("Signal Time: %3.3f (%d ticks)"%(time,ticks))
+        def house_keep():
+            # update time
+            result_str = self.runAndRead("signalTime OpenHRP.state")
+            if result_str:
+                ticks = int(result_str)
+                period = 0.005
+                if self.setting.robotType == '(RobotSimu)':
+                    period = 0.05
+                robottime = ticks*period
+                label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))           
+            
+            if self.errors != [] and time.time() - self.errors[-1]._time < 0.2 : 
+                self.status.set_text("%s" %(self.errors[-1]._msg))
+                self.statusicon.set_from_stock(gtk.STOCK_DIALOG_ERROR,gtk.ICON_SIZE_BUTTON)
+                return True
+
+            if self.warnings != [] and time.time() - self.warnings[-1]._time < 0.2:           
+                self.status.set_text("%s" %(self.warnings[-1]._msg))
+                self.statusicon.set_from_stock(gtk.STOCK_DIALOG_WARNING,gtk.ICON_SIZE_BUTTON)
+                return True
+            
+            self.statusicon.set_from_stock(gtk.STOCK_YES,gtk.ICON_SIZE_BUTTON)
+            self.status.set_text("")
             return True
 
-        gobject.timeout_add(200,update_time)
+        gobject.timeout_add(200,house_keep)
         
         self.cursor_state = None
         self.help_cursor = gtk.gdk.Cursor(gtk.gdk.QUESTION_ARROW)
@@ -355,6 +399,15 @@ class SotWindow(gtk.Window):
         def reset_cam_button_clicked_cb(widget):
             self.rvwidget.camera = Camera()
 
+        def reset_robot_button_clicked_cb(widget):
+            if self.setting.robotType == "(RobotSimu)":                
+                self.runAndRead("OpenHRP.set [46](0,0,0,0,0,0,0,0,-1.04720,2.09440,-1.04720,0,0,0,-1.04720,2.09440,-1.04720,0,0.0000,0,-0,-0,0.17453,-0.17453,-0.17453,-0.87266,0,-0,.0999,0.17453,0.17453,0.17453,-0.87266,0,-0,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999)")
+                
+        def about_item_activate_cb(widget):
+            aboutdialog = self.builder.get_object("aboutdialog")
+            aboutdialog.run()
+            aboutdialog.hide()
+
         action_dict = {"refresh_button_clicked_cb" : self.widget.reload,
                        "zoomin_button_clicked_cb"  : self.widget.on_zoom_in,
                        "zoomout_button_clicked_cb" : self.widget.on_zoom_out,
@@ -370,13 +423,15 @@ class SotWindow(gtk.Window):
                        "info_button_clicked_cb"   : info_button_clicked_cb,
                        "signal_button_clicked_cb"   : signal_button_clicked_cb, 
                        "reset_cam_button_clicked_cb": reset_cam_button_clicked_cb,
+                       "reset_robot_button_clicked_cb": reset_robot_button_clicked_cb,
+                       "about_item_activate_cb" : about_item_activate_cb,
                        }
 
-        builder.connect_signals(action_dict)
+        self.builder.connect_signals(action_dict)
 
         self.show_all()
         if not ( options and options.nw):
-            notebook = builder.get_object("notebook")
+            notebook = self.builder.get_object("notebook")
             notebook.set_current_page(1)
             self.rvwidget.finalInit()
 
@@ -408,8 +463,6 @@ class SotWindow(gtk.Window):
             dlg.set_title('Dot Viewer')
             dlg.run()
             dlg.destroy()
-
-
             
     def set_dotcode(self, dotcode, filename='<stdin>'):
          if self.widget.set_dotcode(dotcode, filename):
@@ -479,21 +532,51 @@ class SotWindow(gtk.Window):
                 return
         # if node not found, highlight nothing
         self.widget.hightlight = []
+
+    
         
     def runAndRead(self,s):
         while True:
             try:
                 result = corba_wrapper.runAndReadWrap(s)
                 break
-            except Exception,error:        
-                self.en_model.clear()
-                messagedialog = gtk.MessageDialog\
-                    (self.win, 0, gtk.MESSAGE_ERROR, \
-                         gtk.BUTTONS_YES_NO,"%s. Retry?"%str(error))
-                response = messagedialog.run()
-                messagedialog.destroy()
-                if response == gtk.RESPONSE_YES:
-                    reload(corba_wrapper)
-                elif response == gtk.RESPONSE_NO:
-                    sys.exit(1)
+            except Exception,error:
+                if self.handle_error("corba",error) == "ignore":
+                    return None
         return result
+
+
+    def get_HRP_config(self):
+        while True:
+            try:
+                pos = corba_wrapper.get_HRP_pos()
+                wst = corba_wrapper.get_wst()
+                break
+            except Exception,error:                
+                if self.handle_error("corba",error) == "ignore":
+                    return None
+
+        if len(wst) != 6:
+            self.handle_warn("RvWidget: Wrong dimension of waist_pos, robot not updated")
+            return None
+
+        for i in range(len(wst)):
+            pos[i] = wst[i]           
+
+        if self.setting.robotType == "(RobotSimu)":
+            pos[2] += 0.105
+
+        return pos
+                 
+    def handle_warn(self,text):
+        time_now = time.time()
+        self.warnings.append( TimedMsg(time_now,text) )
+    
+    def handle_error(self,error_type,error):
+        time_now = time.time()
+        if error_type == "corba":
+            self.errors.append( TimedMsg (time_now, str(error)))
+            self.en_model.clear()
+            self.graph = Graph()
+            reload(corba_wrapper)
+        return "ignore"

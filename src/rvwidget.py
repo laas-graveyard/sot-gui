@@ -11,7 +11,6 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 import gtk.gtkgl
-import corba_wrapper
 
 class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
     """
@@ -53,7 +52,6 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         #     # try single-buffered
         #     self.glconfig = gtk.gdkgl.Config(attrib_list=(gtk.gdkgl.RGBA,
         #                                              gtk.gdkgl.DEPTH_SIZE, 1))
-
         print "self.glconfig.is_rgba() =",            self.glconfig.is_rgba()
         print "self.glconfig.is_double_buffered() =", self.glconfig.is_double_buffered()
         print "self.glconfig.has_depth_buffer() =",   self.glconfig.has_depth_buffer()
@@ -68,39 +66,21 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         self.connect('configure_event', self.reshape)
         self.connect('expose_event', self.DrawGLScene)
 
+        def warn(text):
+            top_window = self.get_ancestor(gtk.Window)
+            if top_window:
+                top_window.warn("RvWidget",text)
+            else:
+                print text
+                
         def idle(widget):
             # Invalidate whole window.
-            while True:
-                try:
-                    pos = corba_wrapper.get_HRP_pos()
-                    wst = corba_wrapper.get_wst()
-                    break
-                except:                    
-                    messagedialog = gtk.MessageDialog\
-                    (self.get_toplevel(), 0, gtk.MESSAGE_ERROR, gtk.BUTTONS_YES_NO,\
-                         "Corba failed. Retry?")
+            top_window = self.get_ancestor(gtk.Window)
 
-                    response = messagedialog.run()
-                    messagedialog.destroy()
+            pos = top_window.get_HRP_config()
+            if pos:
+                self.updateElementConfig(top_window.setting.hrp_rvname,pos)
 
-                    if response == gtk.RESPONSE_YES:
-                        reload(corba_wrapper)
-                    elif response == gtk.RESPONSE_NO:
-                        sys.exit(1)
-
-            if len(wst) == 6:                
-                for i in range(len(wst)):
-                    pos[i] = wst[i] 
-                top_window = self.get_toplevel()
-
-                if hasattr(top_window,'setting'):
-                    if top_window.setting.robotType == "(RobotSimu)":
-                        pos[2] += 0.0
-                    self.updateElementConfig(top_window.setting.hrp_rvname,pos)  
-                print "Warning: top level window has no settings attribute"
-                
-            else:
-                print "Warning! wrong dimension of waist_pos, robot not updated"
 
             widget.window.invalidate_rect(widget.allocation, False)
             # Update window synchronously (fast).
@@ -232,7 +212,6 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         self.setLight()
         self.connect('configure_event', self.reshape)
         self.connect('expose_event', self.DrawGLScene)
-
         return
 
     def DrawGLScene(self, widget ,event):
