@@ -76,23 +76,25 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         def idle(widget):
             # Invalidate whole window.
             top_window = self.get_ancestor(gtk.Window)
+            if top_window:
+                pos = top_window.get_HRP_config()
+                if pos:
+                    self.updateElementConfig(top_window.setting.hrp_rvname,pos)
 
-            pos = top_window.get_HRP_config()
-            if pos:
-                self.updateElementConfig(top_window.setting.hrp_rvname,pos)
-
-
-            widget.window.invalidate_rect(widget.allocation, False)
-            # Update window synchronously (fast).
-            widget.window.process_updates(False)
+            try:
+                widget.window.invalidate_rect(widget.allocation, False)
+                # Update window synchronously (fast).
+                widget.window.process_updates(False)
+            except Exception,error:
+                if top_window:
+                    top_window.handle_warning('[RvWidget::idle_call] Caught exception: %s'%str(error))
+                else:
+                    print error                    
             return True
 
+        self.timeout_src_id = gobject.timeout_add(30,idle,self)
+        
 
-        def map(widget, event):
-            gobject.idle_add(idle, self)
-            return True
-
-        self.connect('map_event', map)
         self.add_events(gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK \
                             | gtk.gdk.POINTER_MOTION_MASK )
 
@@ -101,6 +103,9 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         self.connect('motion-notify-event', self.motion_notify_cb)
         self.connect('scroll-event', self.scroll_event_cb)
  
+
+
+
     def scroll_event_cb(self,widget,event):
         if event.direction == gtk.gdk.SCROLL_UP:
             self.camera.moveBackForth(-100)

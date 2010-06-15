@@ -18,6 +18,7 @@ import gtk,sys
 from rvwidget import *
 from termwidget import TermWidget
 import gtk.glade
+from collections import deque
 
 class TimedMsg(object):
     """
@@ -33,9 +34,6 @@ class TimedMsg(object):
         self._time = time
         self._msg = msg
         
-
-
-
 class Setting(object):
     """
     """    
@@ -46,8 +44,13 @@ class Setting(object):
         self.hrp_rvname = 'hrp'
         self.hrp_simuName = 'OpenHRP'
         self.robotType = None
-
-
+        self.max_warnings = 1000
+        self.max_errors = 1000
+        self.lazy_commands = ["zsh","use_profile sotdev","rlwrap $ROBOTPKG_BASE/bin/sot/test_shell",\
+                                  "run /local/nddang/profiles/sotdev/install/stable/script/simu",\
+                                  "run /local/nddang/profiles/sotdev/install/stable/script/coshell"\
+                                  ]
+        
 class SotWidget(DotWidget):
     """
     """
@@ -75,6 +78,7 @@ class SotWidget(DotWidget):
             atype = entities_str.popleft()
             if aname not in [ row[0] for row in self.sotwin.en_model ]:
                 self.sotwin.en_model.append([aname,atype])
+            time.sleep(0.1)
             if aname=='OpenHRP':
                 self.sotwin.setting.robotType = atype
 
@@ -132,22 +136,26 @@ class SotWidget(DotWidget):
 
         if entity_name == None:
             return
-        iter = self.sotwin.en_model.get_iter_first()    
-        while self.sotwin.en_model[iter][0] != entity_name:
-            iter = self.sotwin.en_model.iter_next(iter)
-        self.sotwin.en_selection = self.sotwin.en_tree_view.get_selection()
-        self.sotwin.en_selection.select_iter(iter)
-        self.sotwin.tree_view_sel_callback(self.sotwin.en_tree_view,False)
 
-        if sig_name == None:
-            return
+        try:
+            iter = self.sotwin.en_model.get_iter_first()    
+            while self.sotwin.en_model[iter][0] != entity_name:
+                iter = self.sotwin.en_model.iter_next(iter)
+            self.sotwin.en_selection = self.sotwin.en_tree_view.get_selection()
+            self.sotwin.en_selection.select_iter(iter)
+            self.sotwin.tree_view_sel_callback(self.sotwin.en_tree_view,False)
 
-        iter = self.sotwin.sig_model.get_iter_first()    
-        while self.sotwin.sig_model[iter][1] != sig_name:
-            iter = self.sotwin.sig_model.iter_next(iter)
-        self.sotwin.sig_selection = self.sotwin.sig_tree_view.get_selection()
-        self.sotwin.sig_selection.select_iter(iter)
-        self.sotwin.tree_view_sel_callback(self.sotwin.sig_tree_view,False)
+            if sig_name == None:
+                return
+
+            iter = self.sotwin.sig_model.get_iter_first()    
+            while self.sotwin.sig_model[iter][1] != sig_name:
+                iter = self.sotwin.sig_model.iter_next(iter)
+            self.sotwin.sig_selection = self.sotwin.sig_tree_view.get_selection()
+            self.sotwin.sig_selection.select_iter(iter)
+            self.sotwin.tree_view_sel_callback(self.sotwin.sig_tree_view,False)
+        except Exception,error:
+            self.sotwin.handle_warning('[SotWidget::mouse_click_action] caught exception: %s'%str(error))
         return   
         
     def on_area_button_release(self, area, event):
@@ -206,6 +214,27 @@ class SotWindow(gtk.Window):
         self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
 
+
+        ## Term widget
+        if options and options.with_term:
+            term_vbox = self.builder.get_object("term_vbox")
+            self.termwidget = TermWidget()
+            term_vbox.pack_start(self.termwidget)
+            if options.lazy_term:
+                for cmd in self.setting.lazy_commands:
+                    cmd = "%s\n"%cmd
+                    self.termwidget.terminal.feed_child(cmd,len(cmd))
+                time.sleep(0.1)
+                reload(corba_wrapper)
+                cmd = "OpenHRP.inc\n"
+                self.termwidget.terminal.feed_child(cmd,len(cmd))
+
+                
+        else:
+            notebook = self.builder.get_object("notebook")
+            notebook.remove_page(2)
+
+
         self.en_model = gtk.ListStore(str,str)
         rendererText = gtk.CellRendererText()
         self.en_column1 = gtk.TreeViewColumn("Entities", rendererText, text=0)
@@ -255,8 +284,8 @@ class SotWindow(gtk.Window):
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
         
         # warnings and error stuff
-        self.warnings = []
-        self.errors = []
+        self.warnings = deque()
+        self.errors = deque()
 
         def word_wrap_cb(widget):
             if widget.get_active()==0:
@@ -316,7 +345,7 @@ class SotWindow(gtk.Window):
                 try:
                     gobject.source_remove(self.coshell_timeout_source_id)
                 except Exception,error:
-                    print "Caught exception %s"%error
+                    self.handdle_warning("[SotWindow::coshell_period_activate_cb] Caught exception %s"%error)
 
             if self.coshell_each_button.get_active()==0:
                 return True
@@ -324,7 +353,7 @@ class SotWindow(gtk.Window):
                 try:
                     period = float(self.coshell_period.get_text())
                 except Exception,error:
-                    print "caught exception %s"%str(error)
+                    self.handdle_warning("[SotWindow::coshell_period_activate_cb] caught exception %s"%str(error))
                     return True
                 if period < 0:
                     return True
@@ -355,12 +384,12 @@ class SotWindow(gtk.Window):
                 robottime = ticks*period
                 label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))           
             
-            if self.errors != [] and time.time() - self.errors[-1]._time < 0.2 : 
+            if len(self.errors) != 0 and time.time() - self.errors[0]._time < 0.2 : 
                 self.status.set_text("%s" %(self.errors[-1]._msg))
                 self.statusicon.set_from_stock(gtk.STOCK_DIALOG_ERROR,gtk.ICON_SIZE_BUTTON)
                 return True
 
-            if self.warnings != [] and time.time() - self.warnings[-1]._time < 0.2:           
+            if len(self.warnings) != 0 and time.time() - self.warnings[0]._time < 0.2:           
                 self.status.set_text("%s" %(self.warnings[-1]._msg))
                 self.statusicon.set_from_stock(gtk.STOCK_DIALOG_WARNING,gtk.ICON_SIZE_BUTTON)
                 return True
@@ -408,12 +437,37 @@ class SotWindow(gtk.Window):
             aboutdialog.run()
             aboutdialog.hide()
 
+        def timestamp_to_str(timestamp):
+            time_tuple = time.localtime(timestamp)
+            return time.strftime("%H:%M:%S", time_tuple)
+
+        def statusicon_button_press_event_cb(widget,event):
+            error_console = self.builder.get_object('error_console')
+            error_text_view = self.builder.get_object('error_text_view')
+            error_buffer = error_text_view.get_buffer()
+            error_buffer.set_text('\n\n'.join([error._msg for error in self.errors]) )
+            error_buffer.set_text('\n\n'.join(["[%s] %s"%(timestamp_to_str(error._time) , error._msg) for error in self.errors]) )
+
+            warning_text_view = self.builder.get_object('warning_text_view')
+            warning_buffer = warning_text_view.get_buffer()
+            warning_buffer.set_text('\n\n'.join(["[%s] %s"%(timestamp_to_str(warning._time) , warning._msg) for warning in self.warnings]) )
+
+
+            error_console.run()
+            error_console.hide()
+
+        def init_corba_button_clicked_cb(widget):
+            reload(corba_wrapper)
+
+        def gtk_main_quit(widget):
+            gtk.main_quit()
+        
         action_dict = {"refresh_button_clicked_cb" : self.widget.reload,
                        "zoomin_button_clicked_cb"  : self.widget.on_zoom_in,
                        "zoomout_button_clicked_cb" : self.widget.on_zoom_out,
                        "zoom100_button_clicked_cb" : self.widget.on_zoom_100,
                        "bestfit_button_clicked_cb" : self.widget.on_zoom_fit,
-                       "gtk_main_quit"             : gtk.main_quit,     
+                       "gtk_main_quit"             : gtk_main_quit,     
                        "wordwrap_button_toggled_cb" : word_wrap_cb,
                        "matlab_button_toggled_cb" : mat_disp_cb,
                        "coshell_each_button_toggled_cb"   : coshell_period_activate_cb,
@@ -425,8 +479,11 @@ class SotWindow(gtk.Window):
                        "reset_cam_button_clicked_cb": reset_cam_button_clicked_cb,
                        "reset_robot_button_clicked_cb": reset_robot_button_clicked_cb,
                        "about_item_activate_cb" : about_item_activate_cb,
+                       "statusicon_button_press_event_cb" : statusicon_button_press_event_cb,
+                       "view_error_menu_activate_cb": (statusicon_button_press_event_cb, None),
+                       "init_corba_button_clicked_cb" : init_corba_button_clicked_cb,
                        }
-
+        self.connect('destroy', gtk.main_quit)
         self.builder.connect_signals(action_dict)
 
         self.show_all()
@@ -557,7 +614,7 @@ class SotWindow(gtk.Window):
                     return None
 
         if len(wst) != 6:
-            self.handle_warn("RvWidget: Wrong dimension of waist_pos, robot not updated")
+            self.handle_warning("RvWidget: Wrong dimension of waist_pos, robot not updated")
             return None
 
         for i in range(len(wst)):
@@ -568,15 +625,18 @@ class SotWindow(gtk.Window):
 
         return pos
                  
-    def handle_warn(self,text):
+    def handle_warning(self,text):
         time_now = time.time()
-        self.warnings.append( TimedMsg(time_now,text) )
-    
+        self.warnings.appendleft( TimedMsg(time_now,text) )
+        if len(self.warnings) > self.setting.max_warnings:
+            self.warnings.pop()
+
     def handle_error(self,error_type,error):
         time_now = time.time()
         if error_type == "corba":
-            self.errors.append( TimedMsg (time_now, str(error)))
+            self.errors.appendleft( TimedMsg (time_now, str(error)))
+            if len(self.errors) > self.setting.max_errors:
+                self.errors.pop()
             self.en_model.clear()
             self.graph = Graph()
-            reload(corba_wrapper)
         return "ignore"

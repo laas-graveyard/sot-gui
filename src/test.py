@@ -13,7 +13,7 @@ except ImportError:
 def main():
     import optparse
     parser = optparse.OptionParser(
-        usage='\n\t%prog [file]',
+        usage='\n\t%prog [options]',
         version='%%prog %s' % __version__)
     parser.add_option(
         '-f', '--filter',
@@ -25,6 +25,16 @@ def main():
         '-n', 
         action="store_true", dest="nw",
         help='start sot_gui without 3D display of the robot')
+
+    parser.add_option(
+        '-t', '--with-term',
+        action="store_true", dest="with_term",
+        help='enable terminal widget')
+
+    parser.add_option(
+         '--lazy',
+         action="store_true", dest="lazy_term",
+         help="run lazy script into term, only works on authour's setup on walker.laas.fr")
 
     (options, args) = parser.parse_args(sys.argv[1:])
     if len(args) > 1:

@@ -33,70 +33,28 @@ class TermWidget(gtk.HBox):
 	background = None
 	blink = 0
 	command = None
-	emulation = "bash"
 	font = "fixed 12"
 	scrollback = 100
 	transparent = 0
 	visible = 0
-	# # Let the user override them.
-	# (shorts, longs) = getopt.getopt(sys.argv[1:], "B:Tabc:f:n:t:v", ["background", "transparent", "audible", "blink", "command=", "font=", "scrollback=", "terminal=", "visible"])
-	# for argpair in (shorts + longs):
-	# 	if ((argpair[0] == '-B') or (argpair[0] == '--background')):
-	# 		print "Setting background image to `" + argpair[1] + "'."
-	# 		background = argpair[1]
-	# 	if ((argpair[0] == '-T') or (argpair[0] == '--transparent')):
-	# 		print "Setting transparency."
-	# 		transparent = not transparent
-	# 	if ((argpair[0] == '-a') or (argpair[0] == '--audible')):
-	# 		print "Setting audible bell."
-	# 		audible = not audible
-	# 	if ((argpair[0] == '-b') or (argpair[0] == '--blink')):
-	# 		print "Setting blinking cursor."
-	# 		blink = not blink
-	# 	if ((argpair[0] == '-c') or (argpair[0] == '--command')):
-	# 		print "Running command `" + argpair[1] + "'."
-	# 		command = argpair[1]
-	# 	if ((argpair[0] == '-f') or (argpair[0] == '--font')):
-	# 		print "Setting font to `" + argpair[1] + "'."
-	# 		font = argpair[1]
-	# 	if ((argpair[0] == '-n') or (argpair[0] == '--scrollback')):
-	# 		scrollback = string.atoi(argpair[1])
-	# 		if (scrollback == 0):
-	# 			scrollback = 100
-	# 		else:
-	# 			print "Setting scrollback size to `" + str(scrollback) + "'."
-	# 	if ((argpair[0] == '-t') or (argpair[0] == '--terminal')):
-	# 		print "Setting terminal type to `" + argpair[1] + "'."
-	# 		emulation = argpair[1]
-	# 	if ((argpair[0] == '-v') or (argpair[0] == '--visible')):
-	# 		print "Setting visible bell."
-	# 		visible = not visible
 
-	terminal = vte.Terminal()
-	if (background):
-		terminal.set_background_image(background)
-	if (transparent):
-		terminal.set_background_transparent(gtk.TRUE)
-	terminal.set_cursor_blinks(blink)
-	terminal.set_emulation(emulation)
-	terminal.set_font_from_string(font)
-	terminal.set_scrollback_lines(scrollback)
-	terminal.set_audible_bell(audible)
-	terminal.set_visible_bell(visible)
-	terminal.connect("child-exited", child_exited_cb)
-	terminal.connect("restore-window", restore_cb)
-	if (command):
-		# Start up the specified command.
-		child_pid = terminal.fork_command(command)
-	else:
-		# Start up the default command, the user's shell.
-		child_pid = terminal.fork_command()
-	terminal.show()
+	self.terminal = vte.Terminal()
+	self.terminal.set_cursor_blinks(blink)
+	self.terminal.set_emulation('xterm')
+	self.terminal.set_font_from_string(font)
+	self.terminal.set_scrollback_lines(scrollback)
+	self.terminal.set_audible_bell(audible)
+	self.terminal.set_visible_bell(visible)
+	self.terminal.connect("child-exited", child_exited_cb)
+	self.terminal.connect("restore-window", restore_cb)        
+        child_pid = self.terminal.fork_command()
+
+	self.terminal.show()
 
 	scrollbar = gtk.VScrollbar()
-	scrollbar.set_adjustment(terminal.get_adjustment())
+	scrollbar.set_adjustment(self.terminal.get_adjustment())
 
-	self.pack_start(terminal)
+	self.pack_start(self.terminal)
 	self.pack_start(scrollbar)
 
         
