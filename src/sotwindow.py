@@ -138,11 +138,12 @@ class SotWidget(DotWidget):
 
         time.sleep(0.1)
 
-        s = open(self.sot_graph_file).read()
-        s = s.replace("/%s"%self.graph_name,self.graph_name)
-        f = open(self.sot_graph_file,'w')
-        f.write(s)
-        f.close()
+        if os.path.isfile(self.sot_graph_file):
+            s = open(self.sot_graph_file).read()
+            s = s.replace("/%s"%self.graph_name,self.graph_name)
+            f = open(self.sot_graph_file,'w')
+            f.write(s)
+            f.close()
         return
 
     def reload(self):
@@ -255,26 +256,43 @@ class SotWindow(gtk.Window):
    
     def __init__(self, options=None,args=None):
         """
-        """
+        """        
         gtk.Window.__init__(self)
         os.system("rm -f %s"%SotWidget.sot_graph_file)
         self.win = self
         self.setting = Setting()
         src_path = os.path.dirname(os.path.abspath(__file__))
-        gladefile = src_path + "/sotwindow.glade"
+        gladefile = src_path + "/main.xml"
         self.builder = gtk.Builder()
         self.builder.add_from_file(gladefile)
         window = self.builder.get_object("window")
         window.child.reparent(self)
         self.setting = Setting()
+
+        ##########################################################################
+        #   Child widget names
+        #
         self.coshell_response_cnt_label = self.builder.get_object("coshell_response_cnt_label")
         self.status = self.builder.get_object("status")
         self.statusicon = self.builder.get_object("statusicon")
         self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
+        ## coshell history
+        self.coshell_hist_text_view = self.builder.get_object("coshell_hist_text_view")
+        self.coshell_hist_text_view_buffer = self.coshell_hist_text_view.get_buffer()
 
+        ##########################################################################
+        #    Mis
+        #       
+        self.hrp_simuName = None
+        self.robotType = None
+        self.has_dyn = False
+        self.rv_incr_cb_srcid = None
+        self.rv_cnt = 0
 
-        ## Term widget
+        ##########################################################################
+        #   Term widget
+        #
         if options and options.with_term:
             term_vbox = self.builder.get_object("term_vbox")
             self.termwidget = TermWidget()
@@ -287,6 +305,10 @@ class SotWindow(gtk.Window):
             notebook = self.builder.get_object("notebook")
             notebook.remove_page(2)
 
+
+        ##########################################################################
+        #   Treeviews
+        #
         self.en_model = gtk.ListStore(str,str)
         rendererText = gtk.CellRendererText()
         self.en_column1 = gtk.TreeViewColumn("Entities", rendererText, text=0)
@@ -334,9 +356,18 @@ class SotWindow(gtk.Window):
         self.sig_tree_view.set_enable_search(True)
         self.sig_tree_view.set_search_column(0)
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
+        #
+        #   End treeviews
+        ##########################################################################
+ 
+        self.coshell_each_button = self.builder.get_object("coshell_each_button")
+        self.coshell_period = self.builder.get_object("coshell_period")
         
-        
-        ## logging stuff
+        self.coshell_timeout_source_id = None
+
+        ##########################################################################
+        #   Logger
+        #       
         os.system('mkdir -p %s/.sot-gui/'%os.environ['HOME'])
         self.log_filename = '%s/.sot-gui/SotWindow.log'%os.environ['HOME']
         self.logger = logging.getLogger('SotWindow')
@@ -347,97 +378,10 @@ class SotWindow(gtk.Window):
 
         self.logger.addHandler(self.handler)
 
-        ## coshell history
-        self.coshell_hist_text_view = self.builder.get_object("coshell_hist_text_view")
-        self.coshell_hist_text_view_buffer = self.coshell_hist_text_view.get_buffer()
 
-        ## robot name stuff
-        self.hrp_simuName = None
-        self.robotType = None
-        self.has_dyn = False
-
-        ###### GUI handlers ##############
-        
-        def word_wrap_cb(widget):
-            if widget.get_active()==0:
-                self.coshell_response.set_wrap_mode(False)
-            else:
-                self.coshell_response.set_wrap_mode(True)
-
-        def mat_disp_cb(widget):
-            if widget.get_active()==0:
-                self.runAndRead('dispmat simple')
-                self.coshell_entry_callback(self.coshell_entry)
-            else:
-                self.runAndRead('dispmat matlab')
-                self.coshell_entry_callback(self.coshell_entry)
-
-        self.rv_cnt = 0
-
-        def rv_incr_cb():
-            self.rv_cnt += 1
-            if not self.hrp_simuName:
-                self.logger.warning("SotWindow.rv_incr_cb Can't find OpenHRP entity")
-                return True
-            cmd = "%s.inc %f"%(self.hrp_simuName, self.setting.simu_dt)
-            self.runAndRead(cmd)                
-            return True
-
-        self.rv_incr_cb_srcid = None
-
-        def simulate_button_toggled_cb(button):
-            if self.rv_incr_cb_srcid:
-                gobject.source_remove(self.rv_incr_cb_srcid)
-                self.rv_incr_cb_srcid = None
-
-            if button.get_active()!=0:
-                if self.robotType =='(RobotSimu)':
-                    self.rv_incr_cb_srcid = gobject.timeout_add\
-                        (int(1000*self.setting.simu_dt),rv_incr_cb)
-                    return True
-
-                warning_msg = gtk.MessageDialog\
-                    (self.win, 0, gtk.MESSAGE_WARNING, \
-                         gtk.BUTTONS_YES_NO, \
-                         "No OpenHRP of type RobotSimu found\n"+\
-                         "Sending OpenHRP.inc command any way?")
-                
-                response = warning_msg.run()
-                warning_msg.destroy()
-                if response == gtk.RESPONSE_YES:
-                    self.rv_incr_cb_srcid = gobject.timeout_add\
-                        (int(1000*self.setting.simu_dt),rv_incr_cb)
-                elif response == gtk.RESPONSE_NO:
-                    button.set_active(0)
-            return True
-
-        self.coshell_each_button = self.builder.get_object("coshell_each_button")
-        self.coshell_period = self.builder.get_object("coshell_period")
-
-        self.coshell_timeout_source_id = None
-        def coshell_period_activate_cb(widget):
-            if self.coshell_timeout_source_id:
-                try:
-                    gobject.source_remove(self.coshell_timeout_source_id)
-                except Exception,error:
-                    self.logger.exception("Caught exception %s"%error)
-
-            if self.coshell_each_button.get_active()==0:
-                return True
-            else:
-                try:
-                    period = float(self.coshell_period.get_text())
-                except Exception,error:
-                    self.logger.exception("Caught exception %s"%error)
-                    return True
-                if period < 0:
-                    return True
-                period_ms = int(1000*period)
-                self.coshell_timeout_source_id = gobject.timeout_add\
-                    ( period_ms, self.coshell_entry_callback , \
-                          self.coshell_entry )                
-                return True
-
+        ##########################################################################
+        #   OpenGL widget
+        #        
         if options and options.nw:
             notebook = self.builder.get_object("notebook")
             notebook.remove_page(1)
@@ -447,170 +391,74 @@ class SotWindow(gtk.Window):
             vbox_rv.pack_start(self.rvwidget)
 
         label_time = self.builder.get_object("sig_time_lab")
-
-        def house_keep():
-            # update time
-            result_str = None
-            self.runAndRead("echo")
-            if not self.hrp_simuName:
-                self.logger.warning("SotWindow.house_keep Can't find OpenHRP entity")            
-            else:
-                result_str = self.runAndRead("signalTime %s.state"%self.hrp_simuName)
-
-            if result_str:
-                ticks = int(result_str)
-                period = 0.005
-                if self.robotType == '(RobotSimu)':
-                    period = 0.05
-                robottime = ticks*period
-                label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))           
-            
-            if self.handler.last_error_t and time.time() - self.handler.last_error_t < 0.2 : 
-                self.status.set_text("%s" %(self.handler.last_error))
-                self.statusicon.set_from_stock(gtk.STOCK_DIALOG_ERROR,gtk.ICON_SIZE_BUTTON)
-                return True
-
-            if self.handler.last_warning_t and time.time() - self.handler.last_warning_t < 0.2 : 
-                self.status.set_text("%s" %(self.handler.last_warning))
-                self.statusicon.set_from_stock(gtk.STOCK_DIALOG_WARNING,gtk.ICON_SIZE_BUTTON)
-                return True
-            
-            self.statusicon.set_from_stock(gtk.STOCK_YES,gtk.ICON_SIZE_BUTTON)
-            self.status.set_text("")
-            return True
-
-        gobject.timeout_add(200,house_keep)
-        
         self.cursor_state = None
         self.help_cursor = gtk.gdk.Cursor(gtk.gdk.QUESTION_ARROW)
         self.info_cursor = gtk.gdk.Cursor(gtk.gdk.PLUS)
 
-        def help_button_clicked_cb(widget):    
-            if self.cursor_state != 'help':
-                widget.window.set_cursor(self.help_cursor)
-                self.cursor_state = 'help'
-            else:
-                widget.window.set_cursor(None)
-                self.cursor_state = None
-            
 
-        def info_button_clicked_cb(widget):
-            if self.cursor_state != 'info':
-                widget.window.set_cursor(self.info_cursor)                
-                self.cursor_state = 'info'
-            else:
-                widget.window.set_cursor(None)
-                self.cursor_state = None
-
-        def signal_button_clicked_cb(widget):
-            widget.window.set_cursor(None)
-            self.cursor_state = None
-
-        def reset_cam_button_clicked_cb(widget):
-            self.rvwidget.camera = Camera()
-             
-        def about_item_activate_cb(widget):
-            aboutdialog = self.builder.get_object("aboutdialog")
-            aboutdialog.run()
-            aboutdialog.hide()
-
-        def timestamp_to_str(timestamp):
-            time_tuple = time.localtime(timestamp)
-            return time.strftime("%H:%M:%S", time_tuple)
-
-        def statusicon_button_press_event_cb(widget,event):
-            log_window = self.builder.get_object('log_window')
-            log_text_view = self.builder.get_object('log_text_view')
-            log_buffer = log_text_view.get_buffer()
-            log_buffer.set_text(open(self.log_filename).read())
-#            log_scrolled_window = self.builder.get_object('log_scrolled_window')
-#            vscrollbar = log_scrolled_window.get_vscrollbar()
-#            vscrollbar.adjustment.set_value(vscrollbar.adjustment.get_upper())
-            log_window.run()
-            log_window.hide()
-
-        def view_log_activate_cb(widget):
-            statusicon_button_press_event_cb(widget,None)
-
-        def view_coshell_hist_activate_cb(widget):
-            self.logger.debug("view_coshell_hist_menu_activate_cb called")
-            coshell_hist_window = self.builder.get_object('coshell_hist_window')
-            coshell_hist_window.run()
-            coshell_hist_window.hide()
-
-        def init_corba_button_clicked_cb(widget):
-            reload(corba_wrapper)
-
-        def gtk_main_quit(widget):
-            gtk.main_quit()
-        
-        def refresh_button_clicked_cb(widget):
-            self.widget.reload()
-
-        def run_menu_activate_cb(widget):
-            chooser = gtk.FileChooserDialog\
-                (title=None,action=gtk.FILE_CHOOSER_ACTION_OPEN,\
-                     buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,\
-                                  gtk.STOCK_OPEN,gtk.RESPONSE_OK))
-            chooser.set_current_folder(self.setting.script_dir)
-            
-            response = chooser.run()
-            if response == gtk.RESPONSE_OK:
-                filename = chooser.get_filename()
-                self.logger.debug("User selects %s script"%filename)
-                if filename:
-                    self.coshell_entry.set_text("run %s"%filename)
-                    self.coshell_entry_callback(self.coshell_entry)
-
-            elif response == gtk.RESPONSE_CANCEL:
-                self.logger.debug("Run script canceled by user")
-
-            chooser.destroy()
-            return
-
-
-        def clear_button_clicked_cb(widget):
-            self.coshell_entry.set_text("")
-
-        action_dict = {"refresh_button_clicked_cb" : refresh_button_clicked_cb,
-                       "zoomin_button_clicked_cb"  : self.widget.on_zoom_in,
-                       "zoomout_button_clicked_cb" : self.widget.on_zoom_out,
-                       "zoom100_button_clicked_cb" : self.widget.on_zoom_100,
-                       "bestfit_button_clicked_cb" : self.widget.on_zoom_fit,
-                       "gtk_main_quit"             : gtk_main_quit,     
-                       "wordwrap_button_toggled_cb" : word_wrap_cb,
-                       "matlab_button_toggled_cb" : mat_disp_cb,
-                       "coshell_each_button_toggled_cb"   : coshell_period_activate_cb,
-                       "coshell_period_activate_cb"   : coshell_period_activate_cb,
-                       "simulate_button_toggled_cb"   : simulate_button_toggled_cb,
-                       "help_button_clicked_cb"   : help_button_clicked_cb,
-                       "info_button_clicked_cb"   : info_button_clicked_cb,
-                       "signal_button_clicked_cb"   : signal_button_clicked_cb, 
-                       "reset_cam_button_clicked_cb": reset_cam_button_clicked_cb,
-                       "about_item_activate_cb" : about_item_activate_cb,
-                       "statusicon_button_press_event_cb" : statusicon_button_press_event_cb,
-                       "view_log_activate_cb": view_log_activate_cb,
-                       "view_coshell_hist_activate_cb": view_coshell_hist_activate_cb,
-                       "init_corba_button_clicked_cb" : init_corba_button_clicked_cb,
-                       "run_menu_activate_cb" : run_menu_activate_cb,
-                       "clear_button_clicked_cb" : clear_button_clicked_cb,
-                       }
-
+        ##########################################################################
+        #  Connnect signals
+        #         
         self.connect('destroy', gtk.main_quit)
-        self.builder.connect_signals(action_dict)
+        self.builder.connect_signals(self)
+        gobject.timeout_add(200,self.house_keep)
 
+
+        ##########################################################################
+        #   Final inits
+        #
         self.show_all()
         if not ( options and options.nw):
             notebook = self.builder.get_object("notebook")
             notebook.set_current_page(1)
             self.rvwidget.finalInit()
         else:
-            time.sleep(1) # sleep until corba is properly set up
+            time.sleep(1) 
 
         reload(corba_wrapper)
         self.widget.reload()
 
-    #### END __init__ ########
+    #   
+    # END __init__
+    ##########################################################################
+
+
+
+
+    ##########################################################################
+    #   House keeping callback
+    #
+    def house_keep(self):
+        # update time
+        result_str = None
+        self.runAndRead("echo")
+        if not self.hrp_simuName:
+            self.logger.warning("SotWindow.house_keep Can't find OpenHRP entity")            
+        else:
+            result_str = self.runAndRead("signalTime %s.state"%self.hrp_simuName)
+
+        if result_str:
+            ticks = int(result_str)
+            period = 0.005
+            if self.robotType == '(RobotSimu)':
+                period = 0.05
+            robottime = ticks*period
+            label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))           
+
+        if self.handler.last_error_t and time.time() - self.handler.last_error_t < 0.2 : 
+            self.status.set_text("%s" %(self.handler.last_error))
+            self.statusicon.set_from_stock(gtk.STOCK_DIALOG_ERROR,gtk.ICON_SIZE_BUTTON)
+            return True
+
+        if self.handler.last_warning_t and time.time() - self.handler.last_warning_t < 0.2 : 
+            self.status.set_text("%s" %(self.handler.last_warning))
+            self.statusicon.set_from_stock(gtk.STOCK_DIALOG_WARNING,gtk.ICON_SIZE_BUTTON)
+            return True
+
+        self.statusicon.set_from_stock(gtk.STOCK_YES,gtk.ICON_SIZE_BUTTON)
+        self.status.set_text("")
+        return True
+
 
     def coshell_entry_callback(self, widget):
         self.coshell_response_count += 1
@@ -759,4 +607,184 @@ class SotWindow(gtk.Window):
             pos[2] += 0.105
 
         return pos
+
+
                  
+    ##########################################################################
+    #   GUI callbacks
+    #
+    #
+    #
+    def word_wrap_button_toggled_cb(self, widget, data = None):
+        if widget.get_active()==0:
+            self.coshell_response.set_wrap_mode(False)
+        else:
+            self.coshell_response.set_wrap_mode(True)
+
+    def matlab_button_toggled_cb(self, widget, data = None):
+        if widget.get_active()==0:
+            self.runAndRead('dispmat simple')
+            self.coshell_entry_callback(self.coshell_entry)
+        else:
+            self.runAndRead('dispmat matlab')
+            self.coshell_entry_callback(self.coshell_entry)
+
+
+
+
+
+    def simulate_button_toggled_cb(self, button, data = None):
+        def rv_incr_cb():
+            self.rv_cnt += 1
+            if not self.hrp_simuName:
+                self.logger.warning("SotWindow.rv_incr_cb Can't find OpenHRP entity")
+                return True
+            cmd = "%s.inc %f"%(self.hrp_simuName, self.setting.simu_dt)
+            self.runAndRead(cmd)                
+            return True
+
+
+        if self.rv_incr_cb_srcid:
+            gobject.source_remove(self.rv_incr_cb_srcid)
+            self.rv_incr_cb_srcid = None
+
+        if button.get_active()!=0:
+            if self.robotType =='(RobotSimu)':
+                self.rv_incr_cb_srcid = gobject.timeout_add\
+                    (int(1000*self.setting.simu_dt),rv_incr_cb)
+                return True
+
+            warning_msg = gtk.MessageDialog\
+                (self.win, 0, gtk.MESSAGE_WARNING, \
+                     gtk.BUTTONS_YES_NO, \
+                     "No OpenHRP of type RobotSimu found\n"+\
+                     "Sending OpenHRP.inc command any way?")
+
+            response = warning_msg.run()
+            warning_msg.destroy()
+            if response == gtk.RESPONSE_YES:
+                self.rv_incr_cb_srcid = gobject.timeout_add\
+                    (int(1000*self.setting.simu_dt),rv_incr_cb)
+            elif response == gtk.RESPONSE_NO:
+                button.set_active(0)
+        return True
+
+    def coshell_period_activate_cb(self, widget, data = None):
+        if self.coshell_timeout_source_id:
+            try:
+                gobject.source_remove(self.coshell_timeout_source_id)
+            except Exception,error:
+                self.logger.exception("Caught exception %s"%error)
+
+        if self.coshell_each_button.get_active()==0:
+            return True
+        else:
+            try:
+                period = float(self.coshell_period.get_text())
+            except Exception,error:
+                self.logger.exception("Caught exception %s"%error)
+                return True
+            if period < 0:
+                return True
+            period_ms = int(1000*period)
+            self.coshell_timeout_source_id = gobject.timeout_add\
+                ( period_ms, self.coshell_entry_callback , \
+                      self.coshell_entry )                
+            return True
+
+
+    def help_button_clicked_cb(self, widget, data = None):    
+        if self.cursor_state != 'help':
+            widget.window.set_cursor(self.help_cursor)
+            self.cursor_state = 'help'
+        else:
+            widget.window.set_cursor(None)
+            self.cursor_state = None
+
+
+    def info_button_clicked_cb(self, widget, data = None):
+        if self.cursor_state != 'info':
+            widget.window.set_cursor(self.info_cursor)                
+            self.cursor_state = 'info'
+        else:
+            widget.window.set_cursor(None)
+            self.cursor_state = None
+
+    def signal_button_clicked_cb(self, widget, data = None):
+        widget.window.set_cursor(None)
+        self.cursor_state = None
+
+    def reset_cam_button_clicked_cb(self, widget, data = None):
+        self.rvwidget.camera = Camera()
+
+    def about_item_activate_cb(self, widget, data = None):
+        aboutdialog = self.builder.get_object("aboutdialog")
+        aboutdialog.run()
+        aboutdialog.hide()
+
+    def statusicon_button_press_event_cb(self, widget , event = None, data = None):
+        log_window = self.builder.get_object('log_window')
+        log_text_view = self.builder.get_object('log_text_view')
+        log_buffer = log_text_view.get_buffer()
+        log_buffer.set_text(open(self.log_filename).read())
+#            log_scrolled_window = self.builder.get_object('log_scrolled_window')
+#            vscrollbar = log_scrolled_window.get_vscrollbar()
+#            vscrollbar.adjustment.set_value(vscrollbar.adjustment.get_upper())
+        log_window.run()
+        log_window.hide()
+
+    def view_log_activate_cb(self, widget, data = None):
+        self.statusicon_button_press_event_cb(widget)
+
+    def view_coshell_hist_activate_cb(self, widget, data = None):
+        self.logger.debug("view_coshell_hist_menu_activate_cb called")
+        coshell_hist_window = self.builder.get_object('coshell_hist_window')
+        coshell_hist_window.run()
+        coshell_hist_window.hide()
+
+    def init_corba_button_clicked_cb(self, widget, data = None):
+        reload(corba_wrapper)
+
+    def gtk_main_quit(self, widget, data = None):
+        gtk.main_quit()
+
+    def refresh_button_clicked_cb(self, widget, data = None):
+        self.widget.reload()
+
+    def run_menu_activate_cb(self, widget, data = None):
+        chooser = gtk.FileChooserDialog\
+            (title=None,action=gtk.FILE_CHOOSER_ACTION_OPEN,\
+                 buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,\
+                              gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+        chooser.set_current_folder(self.setting.script_dir)
+
+        response = chooser.run()
+        if response == gtk.RESPONSE_OK:
+            filename = chooser.get_filename()
+            self.logger.debug("User selects %s script"%filename)
+            if filename:
+                self.coshell_entry.set_text("run %s"%filename)
+                self.coshell_entry_callback(self.coshell_entry)
+
+        elif response == gtk.RESPONSE_CANCEL:
+            self.logger.debug("Run script canceled by user")
+
+        chooser.destroy()
+        return
+
+
+    def clear_button_clicked_cb(self, widget, data = None):
+        self.coshell_entry.set_text("")
+
+    def zoomin_button_clicked_cb(self, widget, data = None):
+        self.widget.on_zoom_in(self, widget, data = None)
+
+    def zoomout_button_clicked_cb(self, widget, data = None):
+        self.widget.on_zoom_out(self, widget, data = None)
+
+    def zoom100_button_clicked_cb(self, widget, data = None):
+        self.widget.on_zoom_100(self, widget, data = None)
+
+
+    def bestfit_button_clicked_cb(self, widget, data = None):
+        self.widget.on_zoom_fit(self, widget, data = None)

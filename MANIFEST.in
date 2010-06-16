@@ -3,4 +3,4 @@ recursive-include bin/ *
 recursive-include docs/ *.rst *.py Makefile make.bat
 prune docs/build/
 recursive-include examples/ *
-
+recursive-include src/ *.xml
