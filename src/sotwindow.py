@@ -8,7 +8,6 @@ __version__ = "0.2.1"
 
 from xdot import *
 import os,re
-import corba_wrapper
 import time
 from collections import deque
 import gobject
@@ -18,7 +17,35 @@ import gtk,sys
 from rvwidget import *
 from termwidget import TermWidget
 import gtk.glade
-from collections import deque
+from collections import deque 
+import sets
+import corba_wrapper
+import logging
+import logging.handlers
+
+
+class MyHandler(logging.handlers.RotatingFileHandler):
+    
+    def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None) :
+        logging.handlers.RotatingFileHandler.__init__\
+            (self, filename, mode, maxBytes, backupCount, encoding)
+        self.last_warning = ""
+        self.last_error = ""
+        self.last_warning_t = None
+        self.last_error_t = None
+
+    def emit(self,record):
+        """
+        """
+        logging.handlers.RotatingFileHandler.emit(self,record)
+        if record.levelno >= 40:
+            self.last_error_t = time.time()
+            self.last_error = record.getMessage()
+
+        elif record.levelno == 30:
+            self.last_warning_t = time.time()
+            self.last_warning = record.getMessage()        
+
 
 class TimedMsg(object):
     """
@@ -42,53 +69,83 @@ class Setting(object):
         """        
         self.simu_dt = 0.05 # integration interval in s
         self.hrp_rvname = 'hrp'
-        self.hrp_simuName = 'OpenHRP'
-        self.robotType = None
-        self.max_warnings = 1000
-        self.max_errors = 1000
         self.lazy_commands = ["zsh","use_profile sotdev","rlwrap $ROBOTPKG_BASE/bin/sot/test_shell",\
-                                  "run /local/nddang/profiles/sotdev/install/stable/script/simu",\
-                                  "run /local/nddang/profiles/sotdev/install/stable/script/coshell"\
+#                                  "run /local/nddang/profiles/sotdev/install/stable/script/simu",\
+                                  "run /local/nddang/profiles/sotdev/install/stable/script/base",\
+                                  "run /local/nddang/profiles/sotdev/install/stable/script/coshell",\
                                   ]
         
+        self.script_dir = os.environ['ROBOTPKG_BASE']+'/script'
+
 class SotWidget(DotWidget):
     """
     """
 
     graph_name = "sotgraph"
     sot_graph_file = "/tmp/sotgraph.dot"
- 
     def __init__(self,sw):
         """
         """
         DotWidget.__init__(self)
         self.sotwin = sw
-
+        self.openfilename = self.sot_graph_file
     def fetch_info_and_graph(self):
         self.sotwin.runAndRead("pool.writegraph %s"%self.sot_graph_file) 
 
-        return_str = self.sotwin.runAndRead("pool.list %s"%self.sot_graph_file)
+        return_str = self.sotwin.runAndRead("pool.list")
         if not return_str:
             return
 
         entities_str = deque(return_str.split())
-
+        graph_names = sets.Set()
+        graph_types = dict()
         while len(entities_str) > 0:
             aname = entities_str.popleft()
             atype = entities_str.popleft()
-            if aname not in [ row[0] for row in self.sotwin.en_model ]:
-                self.sotwin.en_model.append([aname,atype])
-            time.sleep(0.1)
+            graph_names.add(aname)
+            graph_types[aname] = atype
+        
+        model_names = sets.Set()
+        model_iters = dict()
+            
+        try:
+            tree_iter = self.sotwin.en_model.get_iter_first()
+        except:
+            self.sotwin.logger.exception("Caught exception")
+        else:
+            while tree_iter:
+                aname = self.sotwin.en_model[tree_iter]
+                model_names.add(aname)
+                model_iters[aname] = tree_iter
+                tree_iter = self.sotwin.en_model.iter_next(tree_iter)
+
+
+        new_names = graph_names.difference(model_names)
+        old_names = model_names.difference(graph_names)
+
+        for aname in new_names:
+            atype = graph_types[aname]
+            self.sotwin.en_model.append([aname,atype])
             if aname=='OpenHRP':
-                self.sotwin.setting.robotType = atype
+                self.sotwin.hrp_simuName = aname
+                self.sotwin.robotType = atype
+            elif aname == 'dyn':
+                self.sotwin.has_dyn = True
+
+        for aname in old_names:
+            self.sotwin.en_model.remove(model_iters[aname])
+
+
+        time.sleep(0.1)
 
         s = open(self.sot_graph_file).read()
         s = s.replace("/%s"%self.graph_name,self.graph_name)
         f = open(self.sot_graph_file,'w')
         f.write(s)
         f.close()
+        return
 
-    def reload(self,widget):
+    def reload(self):
         self.fetch_info_and_graph()
         if self.openfilename is not None:
             try:
@@ -96,8 +153,8 @@ class SotWidget(DotWidget):
                 self.set_dotcode(fp.read(), self.openfilename)
                 fp.close()
             except IOError:
-                pass
-        
+                self.sotwin.logger.exception("Caught exception")
+ 
     def mouse_click_action(self,jump):
         item = jump.item
         str_list = list()
@@ -155,7 +212,8 @@ class SotWidget(DotWidget):
             self.sotwin.sig_selection.select_iter(iter)
             self.sotwin.tree_view_sel_callback(self.sotwin.sig_tree_view,False)
         except Exception,error:
-            self.sotwin.handle_warning('[SotWidget::mouse_click_action] caught exception: %s'%str(error))
+            self.sotwin.logger.exception("Caught exception %s"%error)
+
         return   
         
     def on_area_button_release(self, area, event):
@@ -199,6 +257,7 @@ class SotWindow(gtk.Window):
         """
         """
         gtk.Window.__init__(self)
+        os.system("rm -f %s"%SotWidget.sot_graph_file)
         self.win = self
         self.setting = Setting()
         src_path = os.path.dirname(os.path.abspath(__file__))
@@ -224,16 +283,9 @@ class SotWindow(gtk.Window):
                 for cmd in self.setting.lazy_commands:
                     cmd = "%s\n"%cmd
                     self.termwidget.terminal.feed_child(cmd,len(cmd))
-                time.sleep(0.1)
-                reload(corba_wrapper)
-                cmd = "OpenHRP.inc\n"
-                self.termwidget.terminal.feed_child(cmd,len(cmd))
-
-                
         else:
             notebook = self.builder.get_object("notebook")
             notebook.remove_page(2)
-
 
         self.en_model = gtk.ListStore(str,str)
         rendererText = gtk.CellRendererText()
@@ -283,10 +335,29 @@ class SotWindow(gtk.Window):
         self.sig_tree_view.set_search_column(0)
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
         
-        # warnings and error stuff
-        self.warnings = deque()
-        self.errors = deque()
+        
+        ## logging stuff
+        os.system('mkdir -p %s/.sot-gui/'%os.environ['HOME'])
+        self.log_filename = '%s/.sot-gui/SotWindow.log'%os.environ['HOME']
+        self.logger = logging.getLogger('SotWindow')
+        self.logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter("%(asctime)s : %(name)s : %(levelname)s : %(message)s")
+        self.handler = MyHandler(self.log_filename, maxBytes = 10000000, backupCount=5)
+        self.handler.setFormatter(formatter)
 
+        self.logger.addHandler(self.handler)
+
+        ## coshell history
+        self.coshell_hist_text_view = self.builder.get_object("coshell_hist_text_view")
+        self.coshell_hist_text_view_buffer = self.coshell_hist_text_view.get_buffer()
+
+        ## robot name stuff
+        self.hrp_simuName = None
+        self.robotType = None
+        self.has_dyn = False
+
+        ###### GUI handlers ##############
+        
         def word_wrap_cb(widget):
             if widget.get_active()==0:
                 self.coshell_response.set_wrap_mode(False)
@@ -302,12 +373,16 @@ class SotWindow(gtk.Window):
                 self.coshell_entry_callback(self.coshell_entry)
 
         self.rv_cnt = 0
+
         def rv_incr_cb():
             self.rv_cnt += 1
-#            print "inc %d"%self.rv_cnt
-            cmd = "%s.inc %f"%(self.setting.hrp_simuName, self.setting.simu_dt)
-            self.runAndRead(cmd)
+            if not self.hrp_simuName:
+                self.logger.warning("SotWindow.rv_incr_cb Can't find OpenHRP entity")
+                return True
+            cmd = "%s.inc %f"%(self.hrp_simuName, self.setting.simu_dt)
+            self.runAndRead(cmd)                
             return True
+
         self.rv_incr_cb_srcid = None
 
         def simulate_button_toggled_cb(button):
@@ -316,7 +391,7 @@ class SotWindow(gtk.Window):
                 self.rv_incr_cb_srcid = None
 
             if button.get_active()!=0:
-                if self.setting.robotType =='(RobotSimu)':
+                if self.robotType =='(RobotSimu)':
                     self.rv_incr_cb_srcid = gobject.timeout_add\
                         (int(1000*self.setting.simu_dt),rv_incr_cb)
                     return True
@@ -345,7 +420,7 @@ class SotWindow(gtk.Window):
                 try:
                     gobject.source_remove(self.coshell_timeout_source_id)
                 except Exception,error:
-                    self.handdle_warning("[SotWindow::coshell_period_activate_cb] Caught exception %s"%error)
+                    self.logger.exception("Caught exception %s"%error)
 
             if self.coshell_each_button.get_active()==0:
                 return True
@@ -353,7 +428,7 @@ class SotWindow(gtk.Window):
                 try:
                     period = float(self.coshell_period.get_text())
                 except Exception,error:
-                    self.handdle_warning("[SotWindow::coshell_period_activate_cb] caught exception %s"%str(error))
+                    self.logger.exception("Caught exception %s"%error)
                     return True
                 if period < 0:
                     return True
@@ -375,22 +450,28 @@ class SotWindow(gtk.Window):
 
         def house_keep():
             # update time
-            result_str = self.runAndRead("signalTime OpenHRP.state")
+            result_str = None
+            self.runAndRead("echo")
+            if not self.hrp_simuName:
+                self.logger.warning("SotWindow.house_keep Can't find OpenHRP entity")            
+            else:
+                result_str = self.runAndRead("signalTime %s.state"%self.hrp_simuName)
+
             if result_str:
                 ticks = int(result_str)
                 period = 0.005
-                if self.setting.robotType == '(RobotSimu)':
+                if self.robotType == '(RobotSimu)':
                     period = 0.05
                 robottime = ticks*period
                 label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))           
             
-            if len(self.errors) != 0 and time.time() - self.errors[0]._time < 0.2 : 
-                self.status.set_text("%s" %(self.errors[-1]._msg))
+            if self.handler.last_error_t and time.time() - self.handler.last_error_t < 0.2 : 
+                self.status.set_text("%s" %(self.handler.last_error))
                 self.statusicon.set_from_stock(gtk.STOCK_DIALOG_ERROR,gtk.ICON_SIZE_BUTTON)
                 return True
 
-            if len(self.warnings) != 0 and time.time() - self.warnings[0]._time < 0.2:           
-                self.status.set_text("%s" %(self.warnings[-1]._msg))
+            if self.handler.last_warning_t and time.time() - self.handler.last_warning_t < 0.2 : 
+                self.status.set_text("%s" %(self.handler.last_warning))
                 self.statusicon.set_from_stock(gtk.STOCK_DIALOG_WARNING,gtk.ICON_SIZE_BUTTON)
                 return True
             
@@ -427,11 +508,7 @@ class SotWindow(gtk.Window):
 
         def reset_cam_button_clicked_cb(widget):
             self.rvwidget.camera = Camera()
-
-        def reset_robot_button_clicked_cb(widget):
-            if self.setting.robotType == "(RobotSimu)":                
-                self.runAndRead("OpenHRP.set [46](0,0,0,0,0,0,0,0,-1.04720,2.09440,-1.04720,0,0,0,-1.04720,2.09440,-1.04720,0,0.0000,0,-0,-0,0.17453,-0.17453,-0.17453,-0.87266,0,-0,.0999,0.17453,0.17453,0.17453,-0.87266,0,-0,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999,.0999)")
-                
+             
         def about_item_activate_cb(widget):
             aboutdialog = self.builder.get_object("aboutdialog")
             aboutdialog.run()
@@ -442,19 +519,24 @@ class SotWindow(gtk.Window):
             return time.strftime("%H:%M:%S", time_tuple)
 
         def statusicon_button_press_event_cb(widget,event):
-            error_console = self.builder.get_object('error_console')
-            error_text_view = self.builder.get_object('error_text_view')
-            error_buffer = error_text_view.get_buffer()
-            error_buffer.set_text('\n\n'.join([error._msg for error in self.errors]) )
-            error_buffer.set_text('\n\n'.join(["[%s] %s"%(timestamp_to_str(error._time) , error._msg) for error in self.errors]) )
+            log_window = self.builder.get_object('log_window')
+            log_text_view = self.builder.get_object('log_text_view')
+            log_buffer = log_text_view.get_buffer()
+            log_buffer.set_text(open(self.log_filename).read())
+#            log_scrolled_window = self.builder.get_object('log_scrolled_window')
+#            vscrollbar = log_scrolled_window.get_vscrollbar()
+#            vscrollbar.adjustment.set_value(vscrollbar.adjustment.get_upper())
+            log_window.run()
+            log_window.hide()
 
-            warning_text_view = self.builder.get_object('warning_text_view')
-            warning_buffer = warning_text_view.get_buffer()
-            warning_buffer.set_text('\n\n'.join(["[%s] %s"%(timestamp_to_str(warning._time) , warning._msg) for warning in self.warnings]) )
+        def view_log_activate_cb(widget):
+            statusicon_button_press_event_cb(widget,None)
 
-
-            error_console.run()
-            error_console.hide()
+        def view_coshell_hist_activate_cb(widget):
+            self.logger.debug("view_coshell_hist_menu_activate_cb called")
+            coshell_hist_window = self.builder.get_object('coshell_hist_window')
+            coshell_hist_window.run()
+            coshell_hist_window.hide()
 
         def init_corba_button_clicked_cb(widget):
             reload(corba_wrapper)
@@ -462,7 +544,35 @@ class SotWindow(gtk.Window):
         def gtk_main_quit(widget):
             gtk.main_quit()
         
-        action_dict = {"refresh_button_clicked_cb" : self.widget.reload,
+        def refresh_button_clicked_cb(widget):
+            self.widget.reload()
+
+        def run_menu_activate_cb(widget):
+            chooser = gtk.FileChooserDialog\
+                (title=None,action=gtk.FILE_CHOOSER_ACTION_OPEN,\
+                     buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,\
+                                  gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+            chooser.set_current_folder(self.setting.script_dir)
+            
+            response = chooser.run()
+            if response == gtk.RESPONSE_OK:
+                filename = chooser.get_filename()
+                self.logger.debug("User selects %s script"%filename)
+                if filename:
+                    self.coshell_entry.set_text("run %s"%filename)
+                    self.coshell_entry_callback(self.coshell_entry)
+
+            elif response == gtk.RESPONSE_CANCEL:
+                self.logger.debug("Run script canceled by user")
+
+            chooser.destroy()
+            return
+
+
+        def clear_button_clicked_cb(widget):
+            self.coshell_entry.set_text("")
+
+        action_dict = {"refresh_button_clicked_cb" : refresh_button_clicked_cb,
                        "zoomin_button_clicked_cb"  : self.widget.on_zoom_in,
                        "zoomout_button_clicked_cb" : self.widget.on_zoom_out,
                        "zoom100_button_clicked_cb" : self.widget.on_zoom_100,
@@ -477,12 +587,15 @@ class SotWindow(gtk.Window):
                        "info_button_clicked_cb"   : info_button_clicked_cb,
                        "signal_button_clicked_cb"   : signal_button_clicked_cb, 
                        "reset_cam_button_clicked_cb": reset_cam_button_clicked_cb,
-                       "reset_robot_button_clicked_cb": reset_robot_button_clicked_cb,
                        "about_item_activate_cb" : about_item_activate_cb,
                        "statusicon_button_press_event_cb" : statusicon_button_press_event_cb,
-                       "view_error_menu_activate_cb": (statusicon_button_press_event_cb, None),
+                       "view_log_activate_cb": view_log_activate_cb,
+                       "view_coshell_hist_activate_cb": view_coshell_hist_activate_cb,
                        "init_corba_button_clicked_cb" : init_corba_button_clicked_cb,
+                       "run_menu_activate_cb" : run_menu_activate_cb,
+                       "clear_button_clicked_cb" : clear_button_clicked_cb,
                        }
+
         self.connect('destroy', gtk.main_quit)
         self.builder.connect_signals(action_dict)
 
@@ -491,11 +604,18 @@ class SotWindow(gtk.Window):
             notebook = self.builder.get_object("notebook")
             notebook.set_current_page(1)
             self.rvwidget.finalInit()
+        else:
+            time.sleep(1) # sleep until corba is properly set up
 
+        reload(corba_wrapper)
+        self.widget.reload()
+
+    #### END __init__ ########
 
     def coshell_entry_callback(self, widget):
         self.coshell_response_count += 1
         entry_text = widget.get_text()
+        self.coshell_hist_text_view_buffer.insert_at_cursor("%s\n"%entry_text)
         hist = [row[0] for row in self.coshell_hist_model]
         if entry_text not in hist:
             self.coshell_hist_model.prepend([entry_text])
@@ -505,7 +625,8 @@ class SotWindow(gtk.Window):
             self.coshell_response_cnt_label.set_text("coshell response <%d>"\
                                              %self.coshell_response_count)
         if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
-            self.widget.reload(widget)
+            self.widget.reload()
+        
         return True
 
     def open_file(self, filename):
@@ -514,12 +635,7 @@ class SotWindow(gtk.Window):
             self.set_dotcode(fp.read(), filename)
             fp.close()
         except IOError, ex:
-            dlg = gtk.MessageDialog(type=gtk.MESSAGE_ERROR,
-                                    message_format=str(ex),
-                                    buttons=gtk.BUTTONS_OK)
-            dlg.set_title('Dot Viewer')
-            dlg.run()
-            dlg.destroy()
+            self.logger.exception("%s"%ex)
             
     def set_dotcode(self, dotcode, filename='<stdin>'):
          if self.widget.set_dotcode(dotcode, filename):
@@ -591,52 +707,56 @@ class SotWindow(gtk.Window):
         self.widget.hightlight = []
 
     
-        
+    def corba_broken_cb(self):
+        ## robot settings
+        self.hrp_simuName = None
+        self.robotType = None
+        self.has_dyn = False
+        self.en_model.clear()
+        self.sig_model.clear()
+        os.system('rm -f %s'%SotWidget.sot_graph_file)
+        self.widget.graph=Graph()
+        self.widget.queue_draw()
+     
     def runAndRead(self,s):
-        while True:
-            try:
-                result = corba_wrapper.runAndReadWrap(s)
-                break
-            except Exception,error:
-                if self.handle_error("corba",error) == "ignore":
-                    return None
+        try:
+            self.logger.debug("coshell-> %s"%s)
+            result = corba_wrapper.runAndReadWrap(s)
+        except Exception,error:
+            self.logger.exception("Caught exception %s"%error)
+            self.corba_broken_cb()
+            return ""        
         return result
 
 
-    def get_HRP_config(self):
-        while True:
-            try:
-                pos = corba_wrapper.get_HRP_pos()
-                wst = corba_wrapper.get_wst()
-                break
-            except Exception,error:                
-                if self.handle_error("corba",error) == "ignore":
-                    return None
+    def get_HRP_config(self):        
+        if not self.hrp_simuName:
+            self.logger.warning("SotWindow.get_HRP_config Can't find OpenHRP entity")  
+            return None
+
+        if not self.has_dyn:
+            self.logger.warning("SotWindow.get_HRP_config Can't find dyn entity")  
+            return None
+
+        try:
+            self.logger.debug("calling corba_wrapper.req_obj.readVector('OpenHRP.state')")
+            pos = corba_wrapper.req_obj.readVector("OpenHRP.state")
+            self.logger.debug("calling corba_wrapper.req_obj.readVector('dyn.ffposition')")
+            wst = corba_wrapper.req_obj.readVector("dyn.ffposition")
+        except Exception,error: 
+            self.logger.exception("Caught exception %s"%error)
+            self.corba_broken_cb()
+            return None
 
         if len(wst) != 6:
-            self.handle_warning("RvWidget: Wrong dimension of waist_pos, robot not updated")
+            self.logger.warning("RvWidget: Wrong dimension of waist_pos, robot not updated")
             return None
 
         for i in range(len(wst)):
             pos[i] = wst[i]           
 
-        if self.setting.robotType == "(RobotSimu)":
+        if self.robotType == "(RobotSimu)":
             pos[2] += 0.105
 
         return pos
                  
-    def handle_warning(self,text):
-        time_now = time.time()
-        self.warnings.appendleft( TimedMsg(time_now,text) )
-        if len(self.warnings) > self.setting.max_warnings:
-            self.warnings.pop()
-
-    def handle_error(self,error_type,error):
-        time_now = time.time()
-        if error_type == "corba":
-            self.errors.appendleft( TimedMsg (time_now, str(error)))
-            if len(self.errors) > self.setting.max_errors:
-                self.errors.pop()
-            self.en_model.clear()
-            self.graph = Graph()
-        return "ignore"

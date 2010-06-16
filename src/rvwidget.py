@@ -66,12 +66,6 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         self.connect('configure_event', self.reshape)
         self.connect('expose_event', self.DrawGLScene)
 
-        def warn(text):
-            top_window = self.get_ancestor(gtk.Window)
-            if top_window:
-                top_window.warn("RvWidget",text)
-            else:
-                print text
                 
         def idle(widget):
             # Invalidate whole window.
@@ -87,7 +81,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
                 widget.window.process_updates(False)
             except Exception,error:
                 if top_window:
-                    top_window.handle_warning('[RvWidget::idle_call] Caught exception: %s'%str(error))
+                    top_window.logger.exception()
                 else:
                     print error                    
             return True
