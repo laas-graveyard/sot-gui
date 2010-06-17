@@ -58,7 +58,7 @@
                     <child>
                       <object class="GtkMenuItem" id="view_log">
                         <property name="visible">True</property>
-                        <property name="label" translatable="yes">View Log</property>
+                        <property name="label" translatable="yes">Log</property>
                         <property name="use_underline">True</property>
                         <signal name="activate" handler="view_log_activate_cb" after="yes"/>
                       </object>
@@ -69,6 +69,14 @@
                         <property name="label" translatable="yes">Coshell History</property>
                         <property name="use_underline">True</property>
                         <signal name="activate" handler="view_coshell_hist_activate_cb" after="yes"/>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckMenuItem" id="view_editor">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Script Editor</property>
+                        <property name="use_underline">True</property>
+                        <signal name="toggled" handler="view_editor_toggled_cb" after="yes"/>
                       </object>
                     </child>
                   </object>

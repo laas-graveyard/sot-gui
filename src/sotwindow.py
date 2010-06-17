@@ -16,9 +16,9 @@ pygtk.require('2.0')
 import gtk,sys
 from rvwidget import *
 from termwidget import TermWidget
+from textwindow import TextWindowBase
 import gtk.glade
 from collections import deque 
-import sets
 import corba_wrapper
 import logging
 import logging.handlers
@@ -46,6 +46,43 @@ class MyHandler(logging.handlers.RotatingFileHandler):
             self.last_warning_t = time.time()
             self.last_warning = record.getMessage()        
 
+class TextWindow(TextWindowBase):
+    """
+    """
+    
+    def __init__(self, sw):
+        """
+        
+        Arguments:
+        - `sw`:
+        """
+        TextWindowBase.__init__(self)
+        self.sotwin = sw
+        self.script_dir = self.sotwin.setting.script_dir
+
+    def run_file(self,filename):
+        """
+        
+        Arguments:
+        - `filename`:
+        """
+        self.sotwin.coshell_entry.set_text("run %s"%filename)
+        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
+
+    def run_cmd(self,cmd):
+        """
+        
+        Arguments:
+        - `filename`:
+        """
+        self.sotwin.coshell_entry.set_text("%s"%cmd)
+        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
+
+    def window_destroy_cb(self, widget, data=None):    
+        self.hide()
+        self.sotwin.view_editor.set_active(False)
+
+        
 
 class TimedMsg(object):
     """
@@ -97,7 +134,7 @@ class SotWidget(DotWidget):
             return
 
         entities_str = deque(return_str.split())
-        graph_names = sets.Set()
+        graph_names = set()
         graph_types = dict()
         while len(entities_str) > 0:
             aname = entities_str.popleft()
@@ -105,7 +142,7 @@ class SotWidget(DotWidget):
             graph_names.add(aname)
             graph_types[aname] = atype
         
-        model_names = sets.Set()
+        model_names = set()
         model_iters = dict()
             
         try:
@@ -261,10 +298,14 @@ class SotWindow(gtk.Window):
         os.system("rm -f %s"%SotWidget.sot_graph_file)
         self.win = self
         self.setting = Setting()
+        
+        ##########################################################################
+        #   Main window
+        #
         src_path = os.path.dirname(os.path.abspath(__file__))
-        gladefile = src_path + "/main.xml"
+        mainxml = src_path + "/main.xml"
         self.builder = gtk.Builder()
-        self.builder.add_from_file(gladefile)
+        self.builder.add_from_file(mainxml)
         window = self.builder.get_object("window")
         window.child.reparent(self)
         self.setting = Setting()
@@ -280,6 +321,7 @@ class SotWindow(gtk.Window):
         ## coshell history
         self.coshell_hist_text_view = self.builder.get_object("coshell_hist_text_view")
         self.coshell_hist_text_view_buffer = self.coshell_hist_text_view.get_buffer()
+        self.view_editor = self.builder.get_object("view_editor")
 
         ##########################################################################
         #    Mis
@@ -390,7 +432,7 @@ class SotWindow(gtk.Window):
             vbox_rv = self.builder.get_object("vbox_rv")
             vbox_rv.pack_start(self.rvwidget)
 
-        label_time = self.builder.get_object("sig_time_lab")
+        self.label_time = self.builder.get_object("sig_time_lab")
         self.cursor_state = None
         self.help_cursor = gtk.gdk.Cursor(gtk.gdk.QUESTION_ARROW)
         self.info_cursor = gtk.gdk.Cursor(gtk.gdk.PLUS)
@@ -405,7 +447,7 @@ class SotWindow(gtk.Window):
 
 
         ##########################################################################
-        #   Final inits
+        #   Final main widow inits
         #
         self.show_all()
         if not ( options and options.nw):
@@ -417,6 +459,13 @@ class SotWindow(gtk.Window):
 
         reload(corba_wrapper)
         self.widget.reload()
+
+        ##########################################################################
+        #   Text window
+        #
+        self.text_window = TextWindow(self)
+
+
 
     #   
     # END __init__
@@ -443,7 +492,7 @@ class SotWindow(gtk.Window):
             if self.robotType == '(RobotSimu)':
                 period = 0.05
             robottime = ticks*period
-            label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))           
+            self.label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))           
 
         if self.handler.last_error_t and time.time() - self.handler.last_error_t < 0.2 : 
             self.status.set_text("%s" %(self.handler.last_error))
@@ -472,7 +521,7 @@ class SotWindow(gtk.Window):
         if self.coshell_response_cnt_label:
             self.coshell_response_cnt_label.set_text("coshell response <%d>"\
                                              %self.coshell_response_count)
-        if re.search(r"new|plug|unplug|destroy|clear|pop|push",entry_text):
+        if re.search(r"run|new|plug|unplug|destroy|clear|pop|push",entry_text):
             self.widget.reload()
         
         return True
@@ -615,7 +664,7 @@ class SotWindow(gtk.Window):
     #
     #
     #
-    def word_wrap_button_toggled_cb(self, widget, data = None):
+    def wordwrap_button_toggled_cb(self, widget, data = None):
         if widget.get_active()==0:
             self.coshell_response.set_wrap_mode(False)
         else:
@@ -628,10 +677,6 @@ class SotWindow(gtk.Window):
         else:
             self.runAndRead('dispmat matlab')
             self.coshell_entry_callback(self.coshell_entry)
-
-
-
-
 
     def simulate_button_toggled_cb(self, button, data = None):
         def rv_incr_cb():
@@ -692,6 +737,8 @@ class SotWindow(gtk.Window):
                       self.coshell_entry )                
             return True
 
+    def coshell_each_button_toggled_cb(self, widget, data = None):
+        self.coshell_period_activate_cb(widget, data )
 
     def help_button_clicked_cb(self, widget, data = None):    
         if self.cursor_state != 'help':
@@ -736,6 +783,15 @@ class SotWindow(gtk.Window):
     def view_log_activate_cb(self, widget, data = None):
         self.statusicon_button_press_event_cb(widget)
 
+    def view_editor_toggled_cb(self, widget, data = None):
+        if not widget.get_active():
+            self.text_window.hide()
+        else:
+            self.text_window.show()
+
+        
+        
+
     def view_coshell_hist_activate_cb(self, widget, data = None):
         self.logger.debug("view_coshell_hist_menu_activate_cb called")
         coshell_hist_window = self.builder.get_object('coshell_hist_window')
@@ -777,14 +833,13 @@ class SotWindow(gtk.Window):
         self.coshell_entry.set_text("")
 
     def zoomin_button_clicked_cb(self, widget, data = None):
-        self.widget.on_zoom_in(self, widget, data = None)
+        self.widget.on_zoom_in(  widget  )
 
     def zoomout_button_clicked_cb(self, widget, data = None):
-        self.widget.on_zoom_out(self, widget, data = None)
+        self.widget.on_zoom_out(  widget )
 
     def zoom100_button_clicked_cb(self, widget, data = None):
-        self.widget.on_zoom_100(self, widget, data = None)
-
+        self.widget.on_zoom_100(  widget )
 
     def bestfit_button_clicked_cb(self, widget, data = None):
-        self.widget.on_zoom_fit(self, widget, data = None)
+        self.widget.on_zoom_fit(  widget )
