@@ -18,10 +18,11 @@ class TextWindowBase(gtk.Window):
 
         # use GtkBuilder to build our interface from the XML file 
         try:
+            src_path = os.path.dirname(os.path.abspath(__file__))
             builder = gtk.Builder()
-            builder.add_from_file("text.xml") 
+            builder.add_from_file(src_path+"/text.xml") 
         except:
-            self.error_message("Failed to load UI XML file: tutorial.xml")
+            self.error_message("Failed to load UI XML file: text.xml")
             sys.exit(1)
         
         self.current_line = 0

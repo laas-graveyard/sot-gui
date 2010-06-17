@@ -59,7 +59,7 @@ class TextWindow(TextWindowBase):
         TextWindowBase.__init__(self)
         self.sotwin = sw
         self.script_dir = self.sotwin.setting.script_dir
-
+        self.sotwin.text_window_destroyed = False
     def run_file(self,filename):
         """
         
@@ -78,11 +78,11 @@ class TextWindow(TextWindowBase):
         self.sotwin.coshell_entry.set_text("%s"%cmd)
         self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
 
-    def window_destroy_cb(self, widget, data=None):    
-        self.hide()
+    def window_destroy_cb(self, widget, data=None):
+        self.sotwin.text_window_destroyed = True
         self.sotwin.view_editor.set_active(False)
+        self.destroy()
 
-        
 
 class TimedMsg(object):
     """
@@ -331,6 +331,7 @@ class SotWindow(gtk.Window):
         self.has_dyn = False
         self.rv_incr_cb_srcid = None
         self.rv_cnt = 0
+        self.text_window_destroyed = False
 
         ##########################################################################
         #   Term widget
@@ -787,10 +788,9 @@ class SotWindow(gtk.Window):
         if not widget.get_active():
             self.text_window.hide()
         else:
-            self.text_window.show()
-
-        
-        
+            if  self.text_window_destroyed:
+                self.text_window = TextWindow(self)
+            self.text_window.show()                            
 
     def view_coshell_hist_activate_cb(self, widget, data = None):
         self.logger.debug("view_coshell_hist_menu_activate_cb called")

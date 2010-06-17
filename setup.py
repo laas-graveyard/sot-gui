@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from distutils.core import setup
 setup(name='sot-gui',
-      version='0.2.1',
+      version='0.3',
       license='BSD',
       platforms='Linux/MacOSX/Windows',
       description='A GUI tool for StackOfTasks framework',
@@ -14,7 +14,7 @@ setup(name='sot-gui',
                     'sotgui.corba.hppCorbaServer',\
                     'sotgui.corba.hppCorbaServer__POA'],
       package_dir={'sotgui':'src'},
-      package_data={'sotgui': ['sotwindow.glade']},
+      package_data={'sotgui': ['main.xml','text.xml']},
       data_files = [('bin',['bin/sot_gui'])]
      )
 
