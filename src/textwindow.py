@@ -5,7 +5,8 @@ import sys
 import os
 import gtk
 import pango
-
+import gobject
+from collections import deque
 class TextWindowBase(gtk.Window):
     ##########################################################################
     #   Init
@@ -40,6 +41,20 @@ class TextWindowBase(gtk.Window):
         self.hltag = self.text_buffer.create_tag(background = 'yellow')
         self.highlighted_text = ""
         self.highlight()
+
+        self.en_tree_view = builder.get_object("en_tree_view")
+        self.en_model = gtk.ListStore(object,str)
+        self.en_tree_view.set_model(self.en_model)
+        treeviewcolumn = gtk.TreeViewColumn('Entity',gtk.CellRendererText(), text = 1)
+        treeviewcolumn.set_sort_column_id(1)
+        self.en_tree_view.append_column(treeviewcolumn)
+        self.en_tree_view.set_rules_hint(True)
+        self.tree_text_buffer = builder.get_object("tree_text_view").get_buffer()
+
+        self.script_text_view = builder.get_object("script_text_view")
+        self.script_text_view.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 30)
+        self.script_text_view.connect("expose_event",self.script_text_view_expose_event_cb)
+        self.script_scrolled_window = builder.get_object("script_scrolled_window")
         # connect signals
         builder.connect_signals(self)
 
@@ -52,7 +67,7 @@ class TextWindowBase(gtk.Window):
         # setup and initialize our statusbar
         self.statusbar_cid = self.statusbar.get_context_id("Tutorial GTK+ Text Editor")
         self.reset_default_status()
-
+        self.tree = None
 
 
     ##########################################################################
@@ -68,7 +83,7 @@ class TextWindowBase(gtk.Window):
 
     def new_menu_item_activate_cb(self, menuitem, data=None):    
         if self.check_for_save(): 
-            self.save_menu_item_activate(None, None)
+            self.save_menu_item_activate_cb(None, None)
 
         buff = self.text_view.get_buffer()
         buff.set_text("")
@@ -134,7 +149,7 @@ class TextWindowBase(gtk.Window):
 
         numbers = []
         pixels = []
-        count = self.get_lines(first_y, last_y, pixels, numbers)
+        count = self.get_lines(text_view, first_y, last_y, pixels, numbers)
 
         # Draw fully internationalized numbers!
         layout = text_view.create_pango_layout("")
@@ -149,6 +164,31 @@ class TextWindowBase(gtk.Window):
         # don't stop emission, need to draw children
         self.highlight()
         return False
+
+    def script_text_view_expose_event_cb(self, widget, event, data = None):
+        text_view = self.script_text_view
+        target = text_view.get_window(gtk.TEXT_WINDOW_LEFT)
+
+        first_y = event.area.y
+        last_y = first_y + event.area.height
+
+        x, first_y = text_view.window_to_buffer_coords(gtk.TEXT_WINDOW_LEFT, 0, first_y)
+        x, last_y = text_view.window_to_buffer_coords(gtk.TEXT_WINDOW_LEFT, 0, last_y)
+
+        numbers = []
+        pixels = []
+        count = self.get_lines(text_view, first_y, last_y, pixels, numbers)
+
+        # Draw fully internationalized numbers!
+        layout = text_view.create_pango_layout("")
+
+        for i in range(count):
+            x, pos = text_view.buffer_to_window_coords(gtk.TEXT_WINDOW_LEFT, 0, pixels[i])
+            string = "%d" % numbers[i]
+            layout.set_text(string)
+            text_view.style.paint_layout(target, text_view.state, False,
+                                      None, text_view, None, 2, pos + 2, layout)
+
 
     def run_button_clicked_cb(self, widget,  data = None):
         self.run_file(self.filename)
@@ -169,6 +209,54 @@ class TextWindowBase(gtk.Window):
             self.highlight()
         else:
             widget.set_text(str(self.text_buffer.get_line_count()-1))
+
+
+    def index_button_clicked_cb(self, widget,  data = None):
+        self.parse_tree()
+        self.en_model.clear()         
+        if self.tree:
+            pile = deque()
+            pile.append(self.tree) 
+            while not len(pile) == 0:
+                an_element = pile.pop()
+                for child in an_element._children:
+                    pile.append(child)
+                    self.en_model.append([child,child._name])
+
+    def en_tree_view_cursor_changed_cb(self, widget,  data = None):
+        treeview = widget
+        (model, iter) = treeview.get_selection().get_selected()
+        row = model[iter]
+        entity = row[0]
+        # print entity.world_coor
+        count = 0
+        tree_text = ""
+        for coor in entity.world_coor:
+            if count == 0:
+                tree_text = "%s:%d\n"%(coor[0]._name,coor[1])
+            else:
+                tree_text += "   "*count + "|\n"
+                tree_text += "   "*count + "->%s:%d"%(coor[0]._name,coor[1])            
+            count +=1
+        self.tree_text_buffer.set_text(tree_text)
+        fname = entity._coor[0]._name
+        lineno = entity._coor[1]
+
+        text_buffer = self.script_text_view.get_buffer()
+        text_buffer.set_text(open(fname).read())
+        iter1 = text_buffer.get_iter_at_line(lineno)
+        try:
+            iter2 = text_buffer.get_iter_at_line(lineno+1)
+            iter2.backward_char()
+        except:
+            iter2 = text_buffer.get_end_iter()
+        # print self.hltag, iter1, iter2, self.hltag.get_property('background-gdk')
+        hltag = text_buffer.create_tag(background = 'yellow')
+        text_buffer.apply_tag(hltag, iter1, iter2)
+        self.script_scrolled_window.queue_draw()
+
+
+
     #
     #   GUI Callbacks
     ##########################################################################
@@ -197,8 +285,7 @@ class TextWindowBase(gtk.Window):
         print "TextWindow.run_cmd(%s)"%cmd
 
 
-    def get_lines(self, first_y, last_y, buffer_coords, numbers):
-        text_view = self.text_view
+    def get_lines(self, text_view, first_y, last_y, buffer_coords, numbers):
         # Get iter at first y
         iter, top = text_view.get_line_at_y(first_y)
 
@@ -364,12 +451,100 @@ class TextWindowBase(gtk.Window):
         self.statusbar.pop(self.statusbar_cid)
         self.statusbar.push(self.statusbar_cid, status)
 
-  
+
+    def parse_tree(self):
+        if not self.filename:
+            self.tree = None
+            return
+        self.tree = Script(self.filename)
+
+
+# a coor: (parent,line_no)
+
+class Entity(object):
+    """
+    """
+    
+    def __init__(self, name = None, coor = (None,-1)):
+        """
+        
+        Arguments:
+        - `name`:
+        - `coor`:
+        - `-1)`:
+        """
+        self._name = name
+        self._coor = coor
+        self._children = []
+        self.world_coor = []
+        if self._coor == None :
+            return
+        parent = self._coor[0]
+        if parent == None:
+            return
+        self.world_coor = parent.world_coor + [self._coor]
+
+
+    def __str__(self):
+        return "Entity " + self._name + " located at %s"%str(self._coor)
+
+
+import re
+
+
+class Script(Entity):
+    """
+    """
+    run_pattern = re.compile(r"run\s+(\S+)")
+    new_pattern = re.compile(r"new\s+(\S+)\s+(\S+)")
+    comment_pattern = re.compile(r"#.+")     
+
+    def __init__(self, name = None, coor = None):
+        """
+        
+        Arguments:
+        - `name`:
+        - `coor`:
+        - `-1)`:
+        """
+        Entity.__init__(self,name,coor)
+        self.parse()
+    
+    def __str__(self):
+        return "Script " + self._name + " located at %s"%str(self._coor) + " with %s children"%len(self._children)
+    
+    def parse(self):
+        lines = open(self._name).readlines()
+        for i in range(len(lines)):
+            line = lines[i]
+            line = self.comment_pattern.sub("",line)
+            m = self.run_pattern.search(line)
+            if m:
+                script_child = Script(m.group(1),(self,i))
+                script_child.world_coor = self.world_coor + [script_child._coor]
+                self._children.append(script_child)                
+                continue
+
+            m = self.new_pattern.search(line)
+            if m:
+                entity_child = Entity(m.group(2),(self,i))
+                entity_child.world_coor = self.world_coor + [entity_child._coor]
+                self._children.append(entity_child)
+                continue
+        # print "parsed ", self
 
 def main():
     window = TextWindowBase()
     window.show()
+    window.filename = "/local/nddang/profiles/sotdev/install/stable/script/localstepper"
+    window.load_file(window.filename)
     gtk.main()
+
+def main2():
+    window = TextWindowBase()
+    window.filename = "/local/nddang/profiles/sotdev/install/stable/script/localstepper"
+    window.parse_tree()
+
     
 if __name__ == "__main__":
     main()

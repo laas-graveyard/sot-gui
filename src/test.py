@@ -37,6 +37,12 @@ def main():
          action="store_true", dest="lazy_term",
          help="run lazy script into term, only works on authour's setup on walker.laas.fr")
 
+    parser.add_option(
+        '-d', '--debug',
+        action="store_true", dest="debug",
+        help='output debut msgs in log file')
+
+
     (options, args) = parser.parse_args(sys.argv[1:])
     if len(args) > 1:
         parser.error('incorrect number of arguments')

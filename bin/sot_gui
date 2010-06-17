@@ -28,6 +28,11 @@ def main():
         help='enable terminal widget')
 
     parser.add_option(
+        '-d', '--debug',
+        action="store_true", dest="debug",
+        help='output debut msgs in log file')
+
+    parser.add_option(
          '--lazy',
          action="store_true", dest="lazy_term",
          help="run lazy script into term, only works on authour's setup on walker.laas.fr")

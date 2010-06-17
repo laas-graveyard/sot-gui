@@ -15,7 +15,8 @@ setup(name='sot-gui',
                     'sotgui.corba.hppCorbaServer__POA'],
       package_dir={'sotgui':'src'},
       package_data={'sotgui': ['main.xml','text.xml']},
-      data_files = [('bin',['bin/sot_gui'])]
+      data_files = [('bin',['bin/sot_gui'])],
+      install_requires = ["gtkgl",'pygtk']
      )
 
 

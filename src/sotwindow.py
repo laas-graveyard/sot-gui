@@ -14,7 +14,6 @@ import gobject
 import pygtk
 pygtk.require('2.0')
 import gtk,sys
-from rvwidget import *
 from termwidget import TermWidget
 from textwindow import TextWindowBase
 import gtk.glade
@@ -299,7 +298,7 @@ class SotWindow(gtk.Window):
         self.win = self
         self.setting = Setting()
         
-        ##########################################################################
+        ######################################################################
         #   Main window
         #
         src_path = os.path.dirname(os.path.abspath(__file__))
@@ -310,7 +309,7 @@ class SotWindow(gtk.Window):
         window.child.reparent(self)
         self.setting = Setting()
 
-        ##########################################################################
+        ######################################################################
         #   Child widget names
         #
         self.coshell_response_cnt_label = self.builder.get_object("coshell_response_cnt_label")
@@ -323,7 +322,7 @@ class SotWindow(gtk.Window):
         self.coshell_hist_text_view_buffer = self.coshell_hist_text_view.get_buffer()
         self.view_editor = self.builder.get_object("view_editor")
 
-        ##########################################################################
+        ######################################################################
         #    Mis
         #       
         self.hrp_simuName = None
@@ -333,7 +332,7 @@ class SotWindow(gtk.Window):
         self.rv_cnt = 0
         self.text_window_destroyed = False
 
-        ##########################################################################
+        ######################################################################
         #   Term widget
         #
         if options and options.with_term:
@@ -349,7 +348,7 @@ class SotWindow(gtk.Window):
             notebook.remove_page(2)
 
 
-        ##########################################################################
+        ######################################################################
         #   Treeviews
         #
         self.en_model = gtk.ListStore(str,str)
@@ -401,20 +400,21 @@ class SotWindow(gtk.Window):
         self.sig_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
         #
         #   End treeviews
-        ##########################################################################
+        ######################################################################
  
         self.coshell_each_button = self.builder.get_object("coshell_each_button")
         self.coshell_period = self.builder.get_object("coshell_period")
         
         self.coshell_timeout_source_id = None
 
-        ##########################################################################
+        ######################################################################
         #   Logger
         #       
         os.system('mkdir -p %s/.sot-gui/'%os.environ['HOME'])
         self.log_filename = '%s/.sot-gui/SotWindow.log'%os.environ['HOME']
         self.logger = logging.getLogger('SotWindow')
-        self.logger.setLevel(logging.DEBUG)
+        if options and options.debug:
+            self.logger.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(asctime)s : %(name)s : %(levelname)s : %(message)s")
         self.handler = MyHandler(self.log_filename, maxBytes = 10000000, backupCount=5)
         self.handler.setFormatter(formatter)
@@ -422,13 +422,14 @@ class SotWindow(gtk.Window):
         self.logger.addHandler(self.handler)
 
 
-        ##########################################################################
+        ######################################################################
         #   OpenGL widget
         #        
         if options and options.nw:
             notebook = self.builder.get_object("notebook")
-            notebook.remove_page(1)
+            notebook.remove_page(1)            
         else:
+            from rvwidget import *
             self.rvwidget = RvWidget()
             vbox_rv = self.builder.get_object("vbox_rv")
             vbox_rv.pack_start(self.rvwidget)
@@ -439,7 +440,7 @@ class SotWindow(gtk.Window):
         self.info_cursor = gtk.gdk.Cursor(gtk.gdk.PLUS)
 
 
-        ##########################################################################
+        ######################################################################
         #  Connnect signals
         #         
         self.connect('destroy', gtk.main_quit)
@@ -447,7 +448,7 @@ class SotWindow(gtk.Window):
         gobject.timeout_add(200,self.house_keep)
 
 
-        ##########################################################################
+        ######################################################################
         #   Final main widow inits
         #
         self.show_all()
@@ -461,7 +462,7 @@ class SotWindow(gtk.Window):
         reload(corba_wrapper)
         self.widget.reload()
 
-        ##########################################################################
+        ######################################################################
         #   Text window
         #
         self.text_window = TextWindow(self)
@@ -470,12 +471,12 @@ class SotWindow(gtk.Window):
 
     #   
     # END __init__
-    ##########################################################################
+    ######################################################################
 
 
 
 
-    ##########################################################################
+    ######################################################################
     #   House keeping callback
     #
     def house_keep(self):
@@ -660,7 +661,7 @@ class SotWindow(gtk.Window):
 
 
                  
-    ##########################################################################
+    ######################################################################
     #   GUI callbacks
     #
     #
