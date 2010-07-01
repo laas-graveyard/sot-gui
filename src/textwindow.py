@@ -9,14 +9,34 @@ import gobject
 from collections import deque
 import pygrep
 from pygrep import TextRef, Match
-class TextBuffer(gtk.TextBuffer):
+import gtksourceview2
+
+class SourceView(gtksourceview2.View):
+    """
+    """
+    
+    def __init__(self, buffer = None):
+        """
+        """
+        gtksourceview2.View.__init__(self,buffer)
+        self.set_show_line_numbers(True)
+
+
+
+class TextBuffer(gtksourceview2.Buffer):
     """
     """
     
     def __init__(self, tbuffer = None):
         """
         """
-        gtk.TextBuffer.__init__(self,tbuffer)
+        gtksourceview2.Buffer.__init__(self,tbuffer)
+        lm = gtksourceview2.LanguageManager()
+        src_path = os.path.dirname(os.path.abspath(__file__))
+        lm.set_search_path([src_path] + lm.get_search_path())
+        if 'sot' in lm.get_language_ids():
+            lang = lm.get_language('sot')
+            self.set_language(lang)
         self.hltag = self.create_tag(background = 'yellow')
         self.hltext = None
 
@@ -59,7 +79,7 @@ class TextBuffer(gtk.TextBuffer):
        
 
 class TextWindowBase(gtk.Window):
-    ##########################################################################
+    #######################################################################
     #   Init
     #
     def __init__(self):    
@@ -84,27 +104,34 @@ class TextWindowBase(gtk.Window):
         window.child.reparent(self)
 
         self.statusbar = builder.get_object("statusbar")
-        self.text_view = builder.get_object("text_view")
-        self.text_view.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 30)
+        self.text_buffer = TextBuffer()
+        self.editor_sourceview = SourceView(self.text_buffer)
+        editor_sw = builder.get_object("editor_scrolledwindow")
+        editor_sw.add(self.editor_sourceview)
+#        self.editor_sourceview.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 30)
         self.line_no_entry = builder.get_object("line_no_entry")
         self.line_no_entry.set_text(str(self.current_line))
 
-        self.text_buffer = TextBuffer()
-        self.text_view.set_buffer(self.text_buffer)
-
+#        self.editor_sourceview.connect("expose_event",\
+#                                          self.editor_sourceview_expose_event_cb)
         self.text_buffer.highlight_line(self.current_line)
         self.find_entry = builder.get_object("find_entry")
-        ##########################################################################
+        #######################################################################
         #   treeviews
         #
         def cell_text_func(treeviewcolumn, cell_renderer, model, iter):
             obj = model.get_value(iter, 0)
-            if isinstance(obj, Entity):                
+            render_text = "CHANGE_ME"
+            if isinstance(obj, Script):
+                render_text = "%s (%s)"\
+                    %(os.path.basename(obj._name),obj._name)
+            elif isinstance(obj, Entity):                
                 render_text = obj._name
             elif isinstance(obj, TextRef):
                 render_text = "%d:%s"%(obj._lineno, obj._linetext)
             elif isinstance(obj, Match):
-                render_text = "%s"%obj._filename
+                render_text = "%s (%s)"\
+                    %(os.path.basename(obj._filename),obj._filename)
             cell_renderer.set_property('text', render_text)
             return
 
@@ -153,21 +180,23 @@ class TextWindowBase(gtk.Window):
         
         #   
         #   treeviews
-        ##########################################################################
-
-        self.script_text_view = builder.get_object("script_text_view")
+        #######################################################################
         tb = TextBuffer()
-        self.script_text_view.set_buffer(tb)
-        self.script_text_view.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 30)
-        self.script_text_view.connect("expose_event",\
-                                          self.script_text_view_expose_event_cb)
+        self.inspector_sourceview = SourceView(tb)
+        self.inspector_sourceview.set_editable(False)
+        inspector_sw = builder.get_object("inspector_scrolledwindow")
+        inspector_sw.add(self.inspector_sourceview)
+        inspector_sw.show()
+#        self.inspector_sourceview.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 30)
+#        self.inspector_sourceview.connect("expose_event",\
+#                                          self.inspector_sourceview_expose_event_cb)
         self.script_scrolled_window = \
-            builder.get_object("script_scrolled_window")
+            builder.get_object("inspector_scrolledwindow")
         # connect signals
         builder.connect_signals(self)
 
         # set the text view font
-        self.text_view.modify_font(pango.FontDescription("monospace 10"))
+        self.inspector_sourceview.modify_font(pango.FontDescription("monospace 10"))
 
         # set the default icon to the GTK "edit" icon
         gtk.window_set_default_icon_name(gtk.STOCK_EDIT)
@@ -178,8 +207,7 @@ class TextWindowBase(gtk.Window):
         self.reset_default_status()
         self.tree = None
 
-
-    ##########################################################################
+    #######################################################################
     #   GUI Callbacks
     #
     def window_destroy_cb(self, widget, data=None):    
@@ -194,7 +222,7 @@ class TextWindowBase(gtk.Window):
         if self.check_for_save(): 
             self.save_menu_item_activate_cb(None, None)
 
-        buff = self.text_view.get_buffer()
+        buff = self.editor_sourceview.get_buffer()
         buff.set_text("")
         buff.set_modified(False)
         self.filename = None
@@ -229,58 +257,58 @@ class TextWindowBase(gtk.Window):
 
     def cut_menu_item_activate_cb(self, menuitem, data=None):
 
-        buff = self.text_view.get_buffer();
+        buff = self.editor_sourceview.get_buffer();
         buff.cut_clipboard (gtk.clipboard_get(), True);
 
     def copy_menu_item_activate_cb(self, menuitem, data=None):
 
-        buff = self.text_view.get_buffer();
+        buff = self.editor_sourceview.get_buffer();
         buff.copy_clipboard (gtk.clipboard_get());
 
     def paste_menu_item_activate_cb(self, menuitem, data=None):
 
-        buff = self.text_view.get_buffer();
+        buff = self.editor_sourceview.get_buffer();
         buff.paste_clipboard (gtk.clipboard_get(), None, True);
 
     def delete_menu_item_activate_cb(self, menuitem, data=None):
 
-        buff = self.text_view.get_buffer();
+        buff = self.editor_sourceview.get_buffer();
         buff.delete_selection (False, True);
 
-    def text_view_expose_event_cb(self, widget, event, data = None):
-        text_view = widget
-        text_buffer = text_view.get_buffer()
-        target = text_view.get_window(gtk.TEXT_WINDOW_LEFT)
+    # def text_view_expose_event_cb(self, widget, event, data = None):
+    #     text_view = widget
+    #     text_buffer = text_view.get_buffer()
+    #     target = text_view.get_window(gtk.TEXT_WINDOW_LEFT)
 
-        first_y = event.area.y
-        last_y = first_y + event.area.height
+    #     first_y = event.area.y
+    #     last_y = first_y + event.area.height
 
-        x, first_y = text_view.window_to_buffer_coords(\
-            gtk.TEXT_WINDOW_LEFT, 0, first_y)
-        x, last_y = text_view.window_to_buffer_coords(\
-            gtk.TEXT_WINDOW_LEFT, 0, last_y)
+    #     x, first_y = text_view.window_to_buffer_coords(\
+    #         gtk.TEXT_WINDOW_LEFT, 0, first_y)
+    #     x, last_y = text_view.window_to_buffer_coords(\
+    #         gtk.TEXT_WINDOW_LEFT, 0, last_y)
 
-        numbers = []
-        pixels = []
-        count = self.get_lines(text_view, first_y, last_y, pixels, numbers)
+    #     numbers = []
+    #     pixels = []
+    #     count = self.get_lines(text_view, first_y, last_y, pixels, numbers)
 
-        # Draw fully internationalized numbers!
-        layout = text_view.create_pango_layout("")
+    #     # Draw fully internationalized numbers!
+    #     layout = text_view.create_pango_layout("")
 
-        for i in range(count):
-            x, pos = text_view.buffer_to_window_coords(\
-                gtk.TEXT_WINDOW_LEFT, 0, pixels[i])
-            string = "%d" % numbers[i]
-            layout.set_text(string)
-            text_view.style.paint_layout(target, text_view.state, False,
-                                      None, text_view, None, 2, \
-                                             pos + 2, layout)
+    #     for i in range(count):
+    #         x, pos = text_view.buffer_to_window_coords(\
+    #             gtk.TEXT_WINDOW_LEFT, 0, pixels[i])
+    #         string = "%d" % numbers[i]
+    #         layout.set_text(string)
+    #         text_view.style.paint_layout(target, text_view.state, False,
+    #                                   None, text_view, None, 2, \
+    #                                          pos + 2, layout)
 
-        # don't stop emission, need to draw children
-        return False
+    #     # don't stop emission, need to draw children
+    #     return False
 
-    def script_text_view_expose_event_cb(self, widget, event, data = None):
-        self.text_view_expose_event_cb(widget, event, data )
+    # def script_text_view_expose_event_cb(self, widget, event, data = None):
+    #     self.editor_sourceview_expose_event_cb(widget, event, data )
 
     def run_button_clicked_cb(self, widget,  data = None):
         self.run_file(self.filename)
@@ -355,7 +383,7 @@ class TextWindowBase(gtk.Window):
         (model, iter) = treeview.get_selection().get_selected()
         row = model[iter]
         entity = row[0]
-        text_buffer = self.script_text_view.get_buffer()
+        text_buffer = self.inspector_sourceview.get_buffer()
 
         tree_iter = self.en_tree_iter_dict[entity]
         self.tr_tree_view.get_selection().select_iter(tree_iter)
@@ -367,7 +395,7 @@ class TextWindowBase(gtk.Window):
         fname = entity._ref[0]
         lineno = entity._ref[1]
 
-        text_buffer = self.script_text_view.get_buffer()
+        text_buffer = self.inspector_sourceview.get_buffer()
         text_buffer.set_text(open(fname).read())
         text_buffer.highlight_line(lineno)
         self.script_scrolled_window.queue_draw()
@@ -378,7 +406,7 @@ class TextWindowBase(gtk.Window):
         (model, iter) = treeview.get_selection().get_selected()
         row = model[iter]
         entity = row[0]
-        text_buffer = self.script_text_view.get_buffer()
+        text_buffer = self.inspector_sourceview.get_buffer()
 
         list_iter = self.en_list_iter_dict[entity]
         self.en_tree_view.get_selection().select_iter(list_iter)
@@ -390,7 +418,7 @@ class TextWindowBase(gtk.Window):
         fname = entity._ref[0]
         lineno = entity._ref[1]
 
-        text_buffer = self.script_text_view.get_buffer()
+        text_buffer = self.inspector_sourceview.get_buffer()
         text_buffer.set_text(open(fname).read())
         text_buffer.highlight_line(lineno)
         self.script_scrolled_window.queue_draw()
@@ -400,7 +428,7 @@ class TextWindowBase(gtk.Window):
         (model, iter) = treeview.get_selection().get_selected()
         obj = model[iter][0]
         text_buffer = TextBuffer()
-        self.script_text_view.set_buffer(text_buffer)
+        self.inspector_sourceview.set_buffer(text_buffer)
 
         text_buffer.set_text(open(obj._filename).read())
         text_buffer.unhighlight_all()
@@ -415,7 +443,7 @@ class TextWindowBase(gtk.Window):
 
     #
     #   GUI Callbacks
-    ##########################################################################
+    #######################################################################
 
    
     def run_file(self,filename):
@@ -464,7 +492,7 @@ class TextWindowBase(gtk.Window):
     def check_for_save (self):
 
         ret = False
-        buff = self.text_view.get_buffer()
+        buff = self.editor_sourceview.get_buffer()
 
         if buff.get_modified():
 
@@ -532,11 +560,11 @@ class TextWindowBase(gtk.Window):
             fin.close()
 
             # disable the text view while loading the buffer with the text
-            self.text_view.set_sensitive(False)
-            buff = self.text_view.get_buffer()
+            self.editor_sourceview.set_sensitive(False)
+            buff = self.editor_sourceview.get_buffer()
             buff.set_text(text)
             buff.set_modified(False)
-            self.text_view.set_sensitive(True)
+            self.editor_sourceview.set_sensitive(True)
 
             # now we can set the current filename since loading was a success
             self.filename = filename
@@ -561,10 +589,10 @@ class TextWindowBase(gtk.Window):
 
         try:
             # disable text view while getting contents of buffer
-            buff = self.text_view.get_buffer()
-            self.text_view.set_sensitive(False)
+            buff = self.editor_sourceview.get_buffer()
+            self.editor_sourceview.set_sensitive(False)
             text = buff.get_text(buff.get_start_iter(), buff.get_end_iter())
-            self.text_view.set_sensitive(True)
+            self.editor_sourceview.set_sensitive(True)
             buff.set_modified(False)
 
             # set the contents of the file to the text from the buffer
@@ -681,11 +709,29 @@ class Script(Entity):
 
         return l
 
+__author__ = "Duong Dang"
+
+__version__ = "0.2.2"
 
 def main():
+    import optparse
+
+    parser = optparse.OptionParser(
+        usage='\n\t%prog [options]',
+        version='%%prog %s' % __version__)
+
+    parser.add_option(
+        '--script-dir',
+        action='store', type='string', dest='script_dir', 
+        help='specify script directory ')
+    (options, args) = parser.parse_args(sys.argv[1:])
+
+
     window = TextWindowBase()
     window.show()
-    window.script_dir = "/local/nddang/profiles/sotdev/install/stable/script/"
+    if options.script_dir:
+        window.script_dir = options.script_dir
+    
     gtk.main()
 
 def main2():

@@ -23,14 +23,15 @@ def main():
         help='graphviz filter: dot, neato, twopi, '+\
             'circo, or fdp [default: %default]')
     parser.add_option(
-        '-n', 
-        action="store_true", dest="nw",
-        help='start sot_gui without 3D display of the robot')
-
-    parser.add_option(
         '-t', '--with-term',
         action="store_true", dest="with_term",
         help='enable terminal widget')
+
+    parser.add_option(
+        '-o', '--with-OpenGL',
+        action="store_true", dest="with_rvwidget",
+        help='enable OpenGL tab')
+
 
     parser.add_option(
          '--lazy',
@@ -41,6 +42,11 @@ def main():
         '-d', '--debug',
         action="store_true", dest="debug",
         help='output debut msgs in log file')
+
+    parser.add_option(
+        '--script-dir',
+        action='store', type='string', dest='script_dir', 
+        help='specify script directory ')
 
 
     (options, args) = parser.parse_args(sys.argv[1:])

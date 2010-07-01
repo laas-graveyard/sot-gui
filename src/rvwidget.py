@@ -11,6 +11,8 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 import gtk.gtkgl
+import logging
+import logging.handlers
 
 class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
     """
@@ -23,7 +25,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         self.camera = Camera()
         self.mouseButtons = [None,None,None]  ## (left,right,middle)
         self.oldMousePos = None
-
+        self.logger = logging
         major, minor = gtk.gdkgl.query_version()
         print "GLX version = %d.%d" % (major, minor)
 
@@ -68,22 +70,15 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
 
                 
         def idle(widget):
-            # Invalidate whole window.
-            top_window = self.get_ancestor(gtk.Window)
-            if top_window:
-                pos = top_window.get_HRP_config()
-                if pos:
-                    self.updateElementConfig(top_window.setting.hrp_rvname,pos)
-
             try:
                 widget.window.invalidate_rect(widget.allocation, False)
                 # Update window synchronously (fast).
                 widget.window.process_updates(False)
             except Exception,error:
-                if top_window:
-                    top_window.logger.exception()
-                else:
-                    print error                    
+                try:
+                    self.logger.exception()
+                except:
+                    print error
             return True
 
         self.timeout_src_id = gobject.timeout_add(30,idle,self)
