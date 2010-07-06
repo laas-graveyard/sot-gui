@@ -22,7 +22,6 @@ import corba_wrapper
 import logging
 import logging.handlers
 
-
 class MyHandler(logging.handlers.RotatingFileHandler):
 
     def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None) :
@@ -66,7 +65,7 @@ class TextWindow(TextWindowBase):
         - `filename`:
         """
         self.sotwin.coshell_entry.set_text("run %s"%filename)
-        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
+        self.sotwin.coshell_entry_activate_cb(self.sotwin.coshell_entry)
 
     def run_cmd(self,cmd):
         """
@@ -75,7 +74,7 @@ class TextWindow(TextWindowBase):
         - `filename`:
         """
         self.sotwin.coshell_entry.set_text("%s"%cmd)
-        self.sotwin.coshell_entry_callback(self.sotwin.coshell_entry)
+        self.sotwin.coshell_entry_activate_cb(self.sotwin.coshell_entry)
 
     def window_destroy_cb(self, widget, data=None):
         self.sotwin.text_window_destroyed = True
@@ -380,7 +379,7 @@ class SotWindow(gtk.Window):
         self.coshell_hist_model = gtk.ListStore(str)
         self.coshell_combo_box_entry.set_model( self.coshell_hist_model)
         self.coshell_combo_box_entry.set_text_column(0)
-        self.coshell_entry.connect('activate',self.coshell_entry_callback)
+        self.coshell_entry.connect('activate',self.coshell_entry_activate_cb)
 
         self.coshell_response =  self.builder.get_object("coshell_response")
         self.coshell_frame =  self.builder.get_object("coshell_frame")
@@ -416,8 +415,11 @@ class SotWindow(gtk.Window):
         os.system('mkdir -p %s/.sot-gui/log'%os.environ['HOME'])
         self.log_filename = '%s/.sot-gui/log/SotWindow.log'%os.environ['HOME']
         self.logger = logging.getLogger('SotWindow')
+        self.log_level = logging.WARNING
         if options and options.debug:
-            self.logger.setLevel(logging.DEBUG)
+            self.log_level = logging.DEBUG
+        self.logger.setLevel(self.log_level)
+
         formatter = logging.Formatter("%(asctime)s : %(name)s : %(levelname)s : %(message)s")
         self.handler = MyHandler(self.log_filename, maxBytes = 10000000, backupCount=5)
         self.handler.setFormatter(formatter)
@@ -428,12 +430,12 @@ class SotWindow(gtk.Window):
         ######################################################################
         #   OpenGL widget
         #
+        self.rvthread = None
         if options and options.with_rvwidget:
             from rvwidget import RvWidget
             self.rvwidget = RvWidget()
             vbox_rv = self.builder.get_object("vbox_rv")
             vbox_rv.pack_start(self.rvwidget)
-
             def update_HRP_config():
                 pos = self.get_HRP_config()
                 if pos:
@@ -441,7 +443,7 @@ class SotWindow(gtk.Window):
                 else:
                     self.logger.warning('Couldnt get robot config')
                 return True
-            gobject.timeout_add(200,update_HRP_config)
+            gobject.timeout_add(40,update_HRP_config)
 
 
         else:
@@ -452,7 +454,9 @@ class SotWindow(gtk.Window):
         self.cursor_state = None
         self.help_cursor = gtk.gdk.Cursor(gtk.gdk.QUESTION_ARROW)
         self.info_cursor = gtk.gdk.Cursor(gtk.gdk.PLUS)
-
+        rv_script_filename = self.builder.get_object("rv_script_filename")
+        if os.path.isfile('%s/.sot-gui/scripts/los.py'%os.environ['HOME']):
+            rv_script_filename.set_text('%s/.sot-gui/scripts/los.py'%os.environ['HOME'])
 
         ######################################################################
         #  Connnect signals
@@ -525,23 +529,6 @@ class SotWindow(gtk.Window):
         return True
 
 
-    def coshell_entry_callback(self, widget):
-        self.coshell_response_count += 1
-        entry_text = widget.get_text()
-        self.coshell_hist_text_view_buffer.insert_at_cursor("%s\n"%entry_text)
-        hist = [row[0] for row in self.coshell_hist_model]
-        if entry_text not in hist:
-            self.coshell_hist_model.prepend([entry_text])
-
-        self.coshell_response.get_buffer().set_text(self.runAndRead(entry_text))
-        if self.coshell_response_cnt_label:
-            self.coshell_response_cnt_label.set_text("coshell response <%d>"\
-                                             %self.coshell_response_count)
-        if re.search(r"run|new|plug|unplug|destroy|clear|pop|push",entry_text):
-            self.widget.reload()
-
-        return True
-
     def open_file(self, filename):
         try:
             fp = file(filename, 'rt')
@@ -570,7 +557,7 @@ class SotWindow(gtk.Window):
             else :
                 cmd = '%s.signals'%row[0]
             self.coshell_entry.set_text(cmd)
-            self.coshell_entry_callback(self.coshell_entry)
+            self.coshell_entry_activate_cb(self.coshell_entry)
             list_signals = self.runAndRead('%s.signals'%row[0])
             lines = list_signals.splitlines()
             pattern = re.compile(r".*(input|output)\((\w+)\)::(\w+)*")
@@ -599,7 +586,7 @@ class SotWindow(gtk.Window):
                 cmd = '%s.signalDep %s'%(ent,sig)
 
             self.coshell_entry.set_text(cmd)
-            self.coshell_entry_callback(self.coshell_entry)
+            self.coshell_entry_activate_cb(self.coshell_entry)
             del cmd
 
         # find node and move there
@@ -637,7 +624,7 @@ class SotWindow(gtk.Window):
             result = corba_wrapper.runAndReadWrap(s)
         except Exception,error:
             self.logger.exception("Caught exception %s"%error)
-            self.corba_broken_cb()
+#            self.corba_broken_cb()
             return ""
         return result
 
@@ -658,7 +645,7 @@ class SotWindow(gtk.Window):
             wst = corba_wrapper.req_obj.readVector("dyn.ffposition")
         except Exception,error:
             self.logger.exception("Caught exception %s"%error)
-            self.corba_broken_cb()
+            # self.corba_broken_cb()
             return None
 
         if len(wst) != 6:
@@ -680,6 +667,24 @@ class SotWindow(gtk.Window):
     #
     #
     #
+    def coshell_entry_activate_cb(self, widget, data = None):
+        self.coshell_response_count += 1
+        entry_text = widget.get_text()
+        self.coshell_hist_text_view_buffer.insert_at_cursor("%s\n"%entry_text)
+        hist = [row[0] for row in self.coshell_hist_model]
+        if entry_text not in hist:
+            self.coshell_hist_model.prepend([entry_text])
+
+        self.coshell_response.get_buffer().set_text(self.runAndRead(entry_text))
+        if self.coshell_response_cnt_label:
+            self.coshell_response_cnt_label.set_text("coshell response <%d>"\
+                                             %self.coshell_response_count)
+        if re.search(r"run|new|plug|unplug|destroy|clear|pop|push",entry_text):
+            self.widget.reload()
+
+        return True
+
+
     def wordwrap_button_toggled_cb(self, widget, data = None):
         if widget.get_active()==0:
             self.coshell_response.set_wrap_mode(False)
@@ -689,10 +694,10 @@ class SotWindow(gtk.Window):
     def matlab_button_toggled_cb(self, widget, data = None):
         if widget.get_active()==0:
             self.runAndRead('dispmat simple')
-            self.coshell_entry_callback(self.coshell_entry)
+            self.coshell_entry_activate_cb(self.coshell_entry)
         else:
             self.runAndRead('dispmat matlab')
-            self.coshell_entry_callback(self.coshell_entry)
+            self.coshell_entry_activate_cb(self.coshell_entry)
 
     def simulate_button_toggled_cb(self, button, data = None):
         def rv_incr_cb():
@@ -749,7 +754,7 @@ class SotWindow(gtk.Window):
                 return True
             period_ms = int(1000*period)
             self.coshell_timeout_source_id = gobject.timeout_add\
-                ( period_ms, self.coshell_entry_callback , \
+                ( period_ms, self.coshell_entry_activate_cb , \
                       self.coshell_entry )
             return True
 
@@ -835,6 +840,8 @@ class SotWindow(gtk.Window):
         reload(corba_wrapper)
 
     def gtk_main_quit(self, widget, data = None):
+        if self.rvthread:
+            self.rvthread.quit = True
         gtk.main_quit()
 
     def refresh_button_clicked_cb(self, widget, data = None):
@@ -853,7 +860,7 @@ class SotWindow(gtk.Window):
             self.logger.debug("User selects %s script"%filename)
             if filename:
                 self.coshell_entry.set_text("run %s"%filename)
-                self.coshell_entry_callback(self.coshell_entry)
+                self.coshell_entry_activate_cb(self.coshell_entry)
 
         elif response == gtk.RESPONSE_CANCEL:
             self.logger.debug("Run script canceled by user")
@@ -890,3 +897,9 @@ class SotWindow(gtk.Window):
 
     def bestfit_button_clicked_cb(self, widget, data = None):
         self.widget.on_zoom_fit(  widget )
+
+    def debug_menu_item_toggled_cb(self, widget, data = None):
+        if widget.get_active == 0:
+            self.logger.setLevel(logging.CRITICAL)
+        if widget.get_active == 0:
+            self.logger.setLevel(self.log_level)

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language id="sot" _name="Sot" version="2.0" _section="Script">
+  <metadata>
+    <property name="mimetypes">text/x-c;text/x-csrc;image/x-xpixmap</property>
+    <property name="globs">*.c</property>
+    <property name="line-comment-start">//</property>
+    <property name="block-comment-start">/*</property>
+    <property name="block-comment-end">*/</property>
+  </metadata>
+
+  <styles>
+    <style id="comment" _name="String" map-to="def:comment"/>
+    <style id="string" _name="String" map-to="def:string"/>
+    <style id="escaped-character" _name="Escaped Character" map-to="def:special-char"/>
+    <style id="preprocessor" _name="Preprocessor" map-to="def:preprocessor"/>
+    <style id="included-file" _name="Included File" map-to="def:string"/>
+    <style id="char" _name="Character" map-to="def:character"/>
+    <style id="keyword" _name="Keyword" map-to="def:keyword"/>
+    <style id="type" _name="Data Type" map-to="def:type"/>
+  </styles>
+  <definitions>
+    <context id="sot">
+      <include>
+
+        <context id="comment" style-ref="comment">
+          <start>#</start>
+          <end>$</end>
+        </context>
+
+        <context id="string" end-at-line-end="true"
+                 style-ref="string">
+          <start>"</start>
+          <end>"</end>
+          <include>
+            <context id="escaped-character" style-ref="escaped-character">
+              <match>\\.</match>
+            </context>
+          </include>
+        </context>
+
+        <context id="comment-multiline"
+                 style-ref="comment">
+          <start>\/\*</start>
+          <end>\*\/</end>
+          <include>
+            <context ref="def:in-comment"/>
+          </include>
+        </context>
+
+        <context id="char" end-at-line-end="true" style-ref="char">
+          <start>'</start>
+          <end>'</end>
+          <include>
+            <context ref="escaped-character"/>
+          </include>
+        </context>
+
+        <context ref="def:decimal"/>
+        <context ref="def:float"/>
+
+        <context id="keywords" style-ref="keyword">
+          <keyword>new</keyword>
+          <keyword>plug</keyword>
+          <keyword>new</keyword>
+          <keyword>destroy</keyword>
+          <keyword>run</keyword>
+          <keyword>loadPlugin</keyword>
+          <keyword>unloadPlugin</keyword>
+          <keyword>help</keyword>
+          <keyword>set</keyword>
+          <keyword>get</keyword>
+          <keyword>compute</keyword>
+          <keyword>try</keyword>
+          <keyword>loadPlugin</keyword>
+          <keyword>displayPlugins</keyword>
+          <keyword>factory</keyword>
+          <keyword>unplug</keyword>
+          <keyword>dispmat</keyword>
+          <keyword>clearPlugin</keyword>
+          <keyword>signalTime</keyword>
+          <keyword>synchro</keyword>
+          <keyword>echo</keyword>
+          <keyword>copy</keyword>
+          <keyword>freeze</keyword>
+          <keyword>squeeze</keyword>
+          <keyword>debugtrace</keyword>
+          <keyword>prompt</keyword>
+          <keyword>sleep</keyword>
+          <keyword>setflag</keyword>
+          <keyword>completion</keyword>
+        </context>
+
+        <context id="types" style-ref="type">
+          <keyword>char</keyword>
+          <keyword>const</keyword>
+          <keyword>double</keyword>
+          <keyword>enum</keyword>
+          <keyword>float</keyword>
+          <keyword>int</keyword>
+          <keyword>long</keyword>
+          <keyword>short</keyword>
+          <keyword>signed</keyword>
+          <keyword>static</keyword>
+          <keyword>struct</keyword>
+          <keyword>typedef</keyword>
+          <keyword>union</keyword>
+          <keyword>unsigned</keyword>
+          <keyword>void</keyword>
+        </context>
+
+      </include>
+    </context>
+  </definitions>
+</language>

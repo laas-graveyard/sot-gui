@@ -17,11 +17,11 @@ import logging.handlers
 class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
     """
     """
-    
+
     def __init__(self):
         """
         """
-        
+
         self.camera = Camera()
         self.mouseButtons = [None,None,None]  ## (left,right,middle)
         self.oldMousePos = None
@@ -68,7 +68,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         self.connect('configure_event', self.reshape)
         self.connect('expose_event', self.DrawGLScene)
 
-                
+
         def idle(widget):
             try:
                 widget.window.invalidate_rect(widget.allocation, False)
@@ -81,8 +81,8 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
                     print error
             return True
 
-        self.timeout_src_id = gobject.timeout_add(30,idle,self)
-        
+        self.timeout_src_id = gobject.timeout_add(40,idle,self)
+
 
         self.add_events(gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK \
                             | gtk.gdk.POINTER_MOTION_MASK )
@@ -91,7 +91,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         self.connect("button-release-event", self.button_release_cb)
         self.connect('motion-notify-event', self.motion_notify_cb)
         self.connect('scroll-event', self.scroll_event_cb)
- 
+
 
 
 
@@ -114,7 +114,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
             self.camera.rotate(dx,dy)
         elif self.mouseButtons[2] == 1:
             self.camera.moveSideway(dx,dy)
-       
+
         self.oldMousePos = (event.x, event.y)
 
     def button_press_cb(self,widget,event):
@@ -148,7 +148,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
 
         # # field of view, aspect ratio, near and far
         # This will squash and stretch our objects as the window is resized.
-        # gluPerspective(45.0, float(width)/float(height), 1, 1000.0)    
+        # gluPerspective(45.0, float(width)/float(height), 1, 1000.0)
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
@@ -160,11 +160,11 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         return
 
     def setLight(self):
-        
+
         # Setup GL States
         glClearColor (0.0, 0.0, 0.0, 0.5);
         # # Black Background
-        glClearDepth (1.0);	
+        glClearDepth (1.0);
         # # Depth Buffer Setup
         glDepthFunc (GL_LEQUAL);
         # # The Type Of Depth Testing
@@ -172,18 +172,18 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         # # Enable Depth Testing
         glShadeModel (GL_SMOOTH);
         # # Select Smooth Shading
-        glHint (GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);	
+        glHint (GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
         # # Set Perspective Calculations To Most Accurate
-        glEnable(GL_TEXTURE_2D);	
+        glEnable(GL_TEXTURE_2D);
         # # Enable Texture Mapping
         glColor4f (1.0, 6.0, 6.0, 1.0)
-    
+
         glClearColor(0.,0.,0.,1.)
         glShadeModel(GL_SMOOTH)
         glEnable(GL_CULL_FACE)
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
-    
+
         lightZeroPosition = [-3.0,3.0,3.0,1.0]
         lightZeroColor = [1.0,1.0,1.0,1.0] #green tinged
         glLightfv(GL_LIGHT0, GL_POSITION, lightZeroPosition)
@@ -212,7 +212,7 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         glcontext = self.get_gl_context()
         gldrawable = self.get_gl_drawable()
 
-        if not gldrawable.gl_begin(glcontext): 
+        if not gldrawable.gl_begin(glcontext):
             return
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -222,12 +222,12 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
             ele = item[1]
 #            print item[0], item[1]._enabled
             ele.render()
-        
+
         if gldrawable.is_double_buffered():
             gldrawable.swap_buffers()
         else:
             glFlush()
-    
+
         gldrawable.gl_end()
 
         return True
