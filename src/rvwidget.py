@@ -183,7 +183,6 @@ class RvWidget(DisplayServer, gtk.gtkgl.DrawingArea):
         glEnable(GL_CULL_FACE)
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
-
         lightZeroPosition = [-3.0,3.0,3.0,1.0]
         lightZeroColor = [1.0,1.0,1.0,1.0] #green tinged
         glLightfv(GL_LIGHT0, GL_POSITION, lightZeroPosition)

@@ -14,7 +14,7 @@ import gtksourceview2
 class SourceView(gtksourceview2.View):
     """
     """
-    
+
     def __init__(self, buffer = None):
         """
         """
@@ -26,7 +26,7 @@ class SourceView(gtksourceview2.View):
 class TextBuffer(gtksourceview2.Buffer):
     """
     """
-    
+
     def __init__(self, tbuffer = None):
         """
         """
@@ -41,11 +41,11 @@ class TextBuffer(gtksourceview2.Buffer):
         self.hltext = None
 
     def highlight_line(self,lineno, start=None, end=None):
-        """Highlight a line in buffer, return highlighted text        
+        """Highlight a line in buffer, return highlighted text
         Arguments:
         - `self`:
         - `lineno`:
-        
+
         """
         self.unhighlight_all()
         iter1 = self.get_iter_at_line(lineno)
@@ -67,7 +67,7 @@ class TextBuffer(gtksourceview2.Buffer):
 
     def unhighlight_all(self):
         """
-        
+
         Arguments:
         - `self`:
         """
@@ -75,28 +75,28 @@ class TextBuffer(gtksourceview2.Buffer):
         iter1 = self.get_start_iter()
         iter2 = self.get_end_iter()
         self.remove_all_tags(iter1, iter2)
-        
-       
+
+
 
 class TextWindowBase(gtk.Window):
     #######################################################################
     #   Init
     #
-    def __init__(self):    
+    def __init__(self):
         # Default values
         gtk.Window.__init__(self)
         self.connect('destroy', self.window_destroy_cb)
         self.filename = None
 
-        # use GtkBuilder to build our interface from the XML file 
+        # use GtkBuilder to build our interface from the XML file
         try:
             src_path = os.path.dirname(os.path.abspath(__file__))
             builder = gtk.Builder()
-            builder.add_from_file(src_path+"/text.xml") 
+            builder.add_from_file(src_path+"/text.xml")
         except:
             self.error_message("Failed to load UI XML file: text.xml")
             sys.exit(1)
-        
+
         self.current_line = 0
         self.script_dir = None
         # get the widgets which will be referenced in callbacks
@@ -125,7 +125,7 @@ class TextWindowBase(gtk.Window):
             if isinstance(obj, Script):
                 render_text = "%s (%s)"\
                     %(os.path.basename(obj._name),obj._name)
-            elif isinstance(obj, Entity):                
+            elif isinstance(obj, Entity):
                 render_text = obj._name
             elif isinstance(obj, TextRef):
                 render_text = "%d:%s"%(obj._lineno, obj._linetext)
@@ -144,8 +144,8 @@ class TextWindowBase(gtk.Window):
             elif  ob1._name > ob2._name:
                 return 1
             else:
-                return -1       
-        SORT_COL = 1000        
+                return -1
+        SORT_COL = 1000
         self.en_tree_view = builder.get_object("en_tree_view")
         self.en_model = gtk.ListStore(object)
         self.en_tree_view.set_model(self.en_model)
@@ -177,8 +177,8 @@ class TextWindowBase(gtk.Window):
         treeviewcolumn.set_cell_data_func( renderer, cell_text_func)
         self.find_tree_view.append_column(treeviewcolumn)
         self.find_tree_view.set_rules_hint(True)
-        
-        #   
+
+        #
         #   treeviews
         #######################################################################
         tb = TextBuffer()
@@ -210,16 +210,16 @@ class TextWindowBase(gtk.Window):
     #######################################################################
     #   GUI Callbacks
     #
-    def window_destroy_cb(self, widget, data=None):    
+    def window_destroy_cb(self, widget, data=None):
         gtk.main_quit()
 
-    def window_delete_event_cb(self, widget, event, data=None):    
+    def window_delete_event_cb(self, widget, event, data=None):
         if self.check_for_save(): self.save_menu_item_activate(None, None)
-        return False 
+        return False
 
 
-    def new_menu_item_activate_cb(self, menuitem, data=None):    
-        if self.check_for_save(): 
+    def new_menu_item_activate_cb(self, menuitem, data=None):
+        if self.check_for_save():
             self.save_menu_item_activate_cb(None, None)
 
         buff = self.editor_sourceview.get_buffer()
@@ -237,11 +237,11 @@ class TextWindowBase(gtk.Window):
         if filename: self.load_file(filename)
 
     def save_menu_item_activate_cb(self, menuitem, data=None):
-        if self.filename == None: 
+        if self.filename == None:
             filename = self.get_save_filename()
             if filename:
                 self.write_file(filename)
-        else: 
+        else:
             self.write_file(None)
 
     def save_as_menu_item_activate_cb(self, menuitem, data=None):
@@ -251,7 +251,7 @@ class TextWindowBase(gtk.Window):
 
 
     def quit_menu_item_activate_cb(self, menuitem, data=None):
-        if self.check_for_save(): 
+        if self.check_for_save():
             self.save_menu_item_activate(None, None)
         self.window_destroy_cb(menuitem, data=None)
 
@@ -312,7 +312,7 @@ class TextWindowBase(gtk.Window):
 
     def run_button_clicked_cb(self, widget,  data = None):
         self.run_file(self.filename)
-        
+
 
     def step_button_clicked_cb(self, widget,  data = None):
         self.run_cmd(self.text_buffer.hltext)
@@ -320,7 +320,7 @@ class TextWindowBase(gtk.Window):
             self.current_line += 1
             self.line_no_entry.set_text(str(self.current_line))
         self.text_buffer.highlight_line(self.current_line)
-        
+
     def line_no_entry_activate_cb(self, widget,  data = None):
         new_line_no = int(widget.get_text())
         if new_line_no < self.text_buffer.get_line_count()-1:
@@ -338,7 +338,7 @@ class TextWindowBase(gtk.Window):
         self.en_tree_iter_dict = dict()
         if self.tree:
             pile = deque()
-            pile.append(self.tree) 
+            pile.append(self.tree)
             while not len(pile) == 0:
                 an_element = pile.pop()
                 for child in an_element._children:
@@ -355,13 +355,13 @@ class TextWindowBase(gtk.Window):
                 self.en_tree_iter_dict[an_element] = \
                     self.tr_model.append(parent_iter,[an_element])
         self.tr_tree_view.expand_all()
-            
+
     def find_entry_activate_cb(self, widget,  data = None):
         querry = self.find_entry.get_text()
         self.find_model.clear()
         if self.tree:
             pile = deque()
-            pile.append(self.tree) 
+            pile.append(self.tree)
             foundfiles = []
             while not len(pile) == 0:
                 an_element = pile.pop()
@@ -445,7 +445,7 @@ class TextWindowBase(gtk.Window):
     #   GUI Callbacks
     #######################################################################
 
-   
+
     def run_file(self,filename):
         print "TextWindow.run_file(%s)"%filename
 
@@ -501,19 +501,19 @@ class TextWindowBase(gtk.Window):
             dialog = gtk.MessageDialog(self,
                                        gtk.DIALOG_MODAL | \
                                            gtk.DIALOG_DESTROY_WITH_PARENT,
-                                       gtk.MESSAGE_QUESTION, 
-                                       gtk.BUTTONS_YES_NO, 
+                                       gtk.MESSAGE_QUESTION,
+                                       gtk.BUTTONS_YES_NO,
                                        message)
             dialog.set_title("Save?")
 
-            if dialog.run() == gtk.RESPONSE_NO: 
+            if dialog.run() == gtk.RESPONSE_NO:
                 ret = False
-            else: 
+            else:
                 ret = True
 
             dialog.destroy()
 
-        return ret    
+        return ret
 
 
     def get_open_filename(self):
@@ -521,7 +521,7 @@ class TextWindowBase(gtk.Window):
         filename = None
         chooser = gtk.FileChooserDialog("Open File...", self,
                                         gtk.FILE_CHOOSER_ACTION_OPEN,
-                                        (gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL, 
+                                        (gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,
                                          gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if self.script_dir:
             chooser.set_current_folder(self.script_dir)
@@ -537,7 +537,7 @@ class TextWindowBase(gtk.Window):
         filename = None
         chooser = gtk.FileChooserDialog("Save File...", self,
                                         gtk.FILE_CHOOSER_ACTION_SAVE,
-                                        (gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL, 
+                                        (gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,
                                          gtk.STOCK_SAVE, gtk.RESPONSE_OK))
         if self.script_dir:
             chooser.set_current_folder(self.script_dir)
@@ -573,15 +573,15 @@ class TextWindowBase(gtk.Window):
             # error loading file, show message to user
             self.error_message ("Could not open file: %s" % filename)
 
-        # clear loading status and restore default 
+        # clear loading status and restore default
         self.statusbar.pop(self.statusbar_cid)
         self.reset_default_status()
         self.index_button_clicked_cb( None )
         self.text_buffer.highlight_line(self.current_line)
-        
+
     def write_file(self, filename):
         # add Saving message to status bar and ensure GUI is current
-        if filename: 
+        if filename:
             self.statusbar.push(self.statusbar_cid, "Saving %s" % filename)
         else:
             self.statusbar.push(self.statusbar_cid, "Saving %s" \
@@ -596,21 +596,21 @@ class TextWindowBase(gtk.Window):
             buff.set_modified(False)
 
             # set the contents of the file to the text from the buffer
-            if filename: 
+            if filename:
                 fout = open(filename, "w")
-            else: 
+            else:
                 fout = open(self.filename, "w")
             fout.write(text)
             fout.close()
 
-            if filename: 
+            if filename:
                 self.filename = filename
 
         except:
             # error writing file, show message to user
             self.error_message ("Could not save file: %s" % filename)
 
-        # clear saving status and restore default     
+        # clear saving status and restore default
         self.statusbar.pop(self.statusbar_cid)
         self.reset_default_status()
 
@@ -635,10 +635,10 @@ class TextWindowBase(gtk.Window):
 class Entity(object):
     """
     """
-    
+
     def __init__(self, name = None, parent = None, ref = (None,-1)):
         """
-        
+
         Arguments:
         - `name`:
         - `coor`:
@@ -661,11 +661,11 @@ class Script(Entity):
     """
     run_pattern = re.compile(r"run\s+(\S+)")
     new_pattern = re.compile(r"new\s+(\S+)\s+(\S+)")
-    comment_pattern = re.compile(r"#.+")     
+    comment_pattern = re.compile(r"#.+")
 
     def __init__(self, name = None, parent = None, ref = None):
         """
-        
+
         Arguments:
         - `name`:
         - `coor`:
@@ -673,11 +673,11 @@ class Script(Entity):
         """
         Entity.__init__(self,name,parent,ref)
         self.parse()
-    
+
     def __str__(self):
         return "Script " + self._name + " located at %s"\
             %str(self._coor) + " with %s children"%len(self._children)
-    
+
     def parse(self):
         lines = open(self._name).readlines()
         for i in range(len(lines)):
@@ -686,7 +686,7 @@ class Script(Entity):
             m = self.run_pattern.search(line)
             if m:
                 script_child = Script(name = m.group(1), parent = self, ref = (self._name,i))
-                self._children.append(script_child)                
+                self._children.append(script_child)
                 continue
 
             m = self.new_pattern.search(line)
@@ -705,7 +705,7 @@ class Script(Entity):
         """
         l = []
 
-        
+
 
         return l
 
@@ -722,22 +722,22 @@ def main():
 
     parser.add_option(
         '--script-dir',
-        action='store', type='string', dest='script_dir', 
+        action='store', type='string', dest='script_dir',
         help='specify script directory ')
     (options, args) = parser.parse_args(sys.argv[1:])
 
 
     window = TextWindowBase()
-    window.show()
+    window.show_all()
     if options.script_dir:
         window.script_dir = options.script_dir
-    
+
     gtk.main()
 
 def main2():
     window = TextWindowBase()
     window.parse_tree()
 
-    
+
 if __name__ == "__main__":
     main()
