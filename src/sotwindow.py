@@ -517,13 +517,14 @@ class SotWindow(gtk.Window):
             try:
                 ticks = int(result_str)
             except:
-                self.logger.warning("wrong time format")
+                self.logger.warning("wrong time format %s"%result_str )
             else:
                 period = 0.005
                 if self.robotType == '(RobotSimu)':
                     period = 0.05
                     robottime = ticks*period
-                self.label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))
+                self.sig_time_lab.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))
+
 
         if self.handler.last_error_t and time.time() - self.handler.last_error_t < 0.2 :
             self.status.set_text("%s" %(self.handler.last_error))
