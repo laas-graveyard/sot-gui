@@ -18,9 +18,10 @@ from termwidget import TermWidget
 from textwindow import TextWindowBase
 import gtk.glade
 from collections import deque
-import corba_wrapper
+import corba_util
 import logging
 import logging.handlers
+sys.path = [os.path.dirname(os.path.abspath(__file__))+"/idl"] + sys.path
 
 class MyHandler(logging.handlers.RotatingFileHandler):
 
@@ -289,6 +290,12 @@ class SotWindow(gtk.Window):
     </ui>
     '''
 
+    def __getattr__(self, a):
+        try:
+            return self.builder.get_object(a)
+        except:
+            raise AttributeError("Invalid attribute/widget name %s "%a)
+
     def __init__(self, options=None,args=None):
         """
         """
@@ -313,15 +320,15 @@ class SotWindow(gtk.Window):
         ######################################################################
         #   Child widget names
         #
-        self.coshell_response_cnt_label = self.builder.get_object("coshell_response_cnt_label")
-        self.status = self.builder.get_object("status")
-        self.statusicon = self.builder.get_object("statusicon")
+#        self.coshell_response_cnt_label = self.builder.get_object("coshell_response_cnt_label")
+#        self.status = self.builder.get_object("status")
+#        self.statusicon = self.builder.get_object("statusicon")
         self.coshell_response_count = -1
         self.coshell_timeout_source_id = None
         ## coshell history
-        self.coshell_hist_text_view = self.builder.get_object("coshell_hist_text_view")
-        self.coshell_hist_text_view_buffer = self.coshell_hist_text_view.get_buffer()
-        self.view_editor = self.builder.get_object("view_editor")
+        coshell_hist_text_view = self.builder.get_object("coshell_hist_text_view")
+        self.coshell_hist_text_view_buffer = coshell_hist_text_view.get_buffer()
+#        self.view_editor = self.builder.get_object("view_editor")
 
         ######################################################################
         #    Mis
@@ -374,17 +381,17 @@ class SotWindow(gtk.Window):
         vbox_graph = self.builder.get_object("vbox_graph")
         vbox_graph.pack_start(self.widget,True,True,0)
 
-        self.coshell_combo_box_entry =  self.builder.get_object("coshell_combo_box_entry")
+#        self.coshell_combo_box_entry =  self.builder.get_object("coshell_combo_box_entry")
         self.coshell_entry = self.coshell_combo_box_entry.child
         self.coshell_hist_model = gtk.ListStore(str)
         self.coshell_combo_box_entry.set_model( self.coshell_hist_model)
         self.coshell_combo_box_entry.set_text_column(0)
         self.coshell_entry.connect('activate',self.coshell_entry_activate_cb)
 
-        self.coshell_response =  self.builder.get_object("coshell_response")
-        self.coshell_frame =  self.builder.get_object("coshell_frame")
+#        self.coshell_response =  self.builder.get_object("coshell_response")
+#        self.coshell_frame =  self.builder.get_object("coshell_frame")
 
-        self.en_tree_view = self.builder.get_object("en_tree_view")
+#        self.en_tree_view = self.builder.get_object("en_tree_view")
         self.en_tree_view.set_model(self.en_model)
         self.en_tree_view.append_column(self.en_column1)
         self.en_tree_view.append_column(self.en_column2)
@@ -392,7 +399,7 @@ class SotWindow(gtk.Window):
         self.en_tree_view.set_search_column(0)
         self.en_tree_view.connect('cursor-changed',self.tree_view_sel_callback)
 
-        self.sig_tree_view = self.builder.get_object("sig_tree_view")
+#        self.sig_tree_view = self.builder.get_object("sig_tree_view")
         self.sig_tree_view.set_model(self.sig_model)
         self.sig_tree_view.append_column(self.sig_column1)
         self.sig_tree_view.append_column(self.sig_column2)
@@ -403,8 +410,8 @@ class SotWindow(gtk.Window):
         #   End treeviews
         ######################################################################
 
-        self.coshell_each_button = self.builder.get_object("coshell_each_button")
-        self.coshell_period = self.builder.get_object("coshell_period")
+#        self.coshell_each_button = self.builder.get_object("coshell_each_button")
+#        self.coshell_period = self.builder.get_object("coshell_period")
 
         self.coshell_timeout_source_id = None
 
@@ -432,7 +439,7 @@ class SotWindow(gtk.Window):
         #
         self.rvthread = None
         if options and options.with_rvwidget:
-            from rvwidget import RvWidget
+            from robotviewer.rvwidget import RvWidget
             self.rvwidget = RvWidget()
             vbox_rv = self.builder.get_object("vbox_rv")
             vbox_rv.pack_start(self.rvwidget)
@@ -450,7 +457,7 @@ class SotWindow(gtk.Window):
             notebook = self.builder.get_object("notebook")
             notebook.remove_page(1)
 
-        self.label_time = self.builder.get_object("sig_time_lab")
+#        self.label_time = self.builder.get_object("sig_time_lab")
         self.cursor_state = None
         self.help_cursor = gtk.gdk.Cursor(gtk.gdk.QUESTION_ARROW)
         self.info_cursor = gtk.gdk.Cursor(gtk.gdk.PLUS)
@@ -477,13 +484,13 @@ class SotWindow(gtk.Window):
         else:
             time.sleep(1)
 
-        reload(corba_wrapper)
         self.widget.reload()
 
         ######################################################################
         #   Text window
         #
         self.text_window = TextWindow(self)
+        self.sotobj = corba_util.GetObject("hppCorbaServer",'hppCorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
 
 
 
@@ -507,12 +514,16 @@ class SotWindow(gtk.Window):
             result_str = self.runAndRead("signalTime %s.state"%self.hrp_simuName)
 
         if result_str:
-            ticks = int(result_str)
-            period = 0.005
-            if self.robotType == '(RobotSimu)':
-                period = 0.05
-            robottime = ticks*period
-            self.label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))
+            try:
+                ticks = int(result_str)
+            except:
+                self.logger.warning("wrong time format")
+            else:
+                period = 0.005
+                if self.robotType == '(RobotSimu)':
+                    period = 0.05
+                    robottime = ticks*period
+                self.label_time.set_text("Signal Time: %3.3f (%d ticks)"%(robottime,ticks))
 
         if self.handler.last_error_t and time.time() - self.handler.last_error_t < 0.2 :
             self.status.set_text("%s" %(self.handler.last_error))
@@ -621,7 +632,7 @@ class SotWindow(gtk.Window):
     def runAndRead(self,s):
         try:
             self.logger.debug("coshell-> %s"%s)
-            result = corba_wrapper.runAndReadWrap(s)
+            result = self.sotobj.runAndRead(s)
         except Exception,error:
             self.logger.exception("Caught exception %s"%error)
 #            self.corba_broken_cb()
@@ -639,10 +650,10 @@ class SotWindow(gtk.Window):
             return None
 
         try:
-            self.logger.debug("calling corba_wrapper.req_obj.readVector('OpenHRP.state')")
-            pos = corba_wrapper.req_obj.readVector("OpenHRP.state")
-            self.logger.debug("calling corba_wrapper.req_obj.readVector('dyn.ffposition')")
-            wst = corba_wrapper.req_obj.readVector("dyn.ffposition")
+            self.logger.debug("calling self.sotobj.req_obj.readVector('OpenHRP.state')")
+            pos = self.sotobj.readVector("OpenHRP.state")
+            self.logger.debug("calling self.sotobj.req_obj.readVector('dyn.ffposition')")
+            wst = self.sotobj.readVector("dyn.ffposition")
         except Exception,error:
             self.logger.exception("Caught exception %s"%error)
             # self.corba_broken_cb()
@@ -837,7 +848,8 @@ class SotWindow(gtk.Window):
         coshell_hist_window.hide()
 
     def init_corba_button_clicked_cb(self, widget, data = None):
-        reload(corba_wrapper)
+        self.sotobj = corba_util.GetObject("hppCorbaServer",'hppCorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
+
 
     def gtk_main_quit(self, widget, data = None):
         if self.rvthread:

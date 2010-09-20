@@ -1,0 +1,27 @@
+sot.clear
+OpenHRP.reinit from mc
+OpenHRP.play
+tr.start
+run /local/nddang/profiles/sotdev/install/stable/script/hwpgpginit
+run /local/nddang/profiles/sotdev/install/stable/script/hwpginitframes
+plug lfo_H_wa.out OpenHRP.positionIN
+run /local/nddang/profiles/sotdev/install/stable/script/walkreact-joystick
+run /local/nddang/profiles/sotdev/install/stable/script/walking/hwpgfeettasksrel
+# run /local/nddang/profiles/sotdev/install/stable/script/clamp-workspace
+# run /local/nddang/profiles/sotdev/install/stable/script/handsAltitude
+run /local/nddang/profiles/sotdev/install/stable/script/taskPosture
+# collisiondetection
+OpenHRP.periodicCall addSignal dyn.0
+
+# OpenHRP.periodicCall addSignal dyn.lh
+OpenHRP.periodicCall addSignal dyn2.0
+# OpenHRP.periodicCall addSignal dyn2.lh
+sot.clear
+sot.push taskTwofeet
+sot.push taskWaist
+# zeroaltitude
+# sot.push taskRhand
+# sot.push taskLhand
+sot.push taskComPD
+# sot.push taskGrip
+run /local/nddang/profiles/sotdev/install/stable/script/stepping
