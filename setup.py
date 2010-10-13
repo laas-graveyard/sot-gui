@@ -11,11 +11,11 @@ setup(name='sot-gui',
       url='www.laas.fr/~nddang',
       packages=['sotgui',\
                     'sotgui.idl',\
-                    'sotgui.idl.hppCorbaServer',\
-                    'sotgui.idl.hppCorbaServer__POA'],
+                    'sotgui.idl.CorbaServer',\
+                    'sotgui.idl.CorbaServer__POA'],
       package_dir={'sotgui':'src'},
       package_data={'sotgui': ['main.xml','text.xml']},
-      data_files = [('bin',['bin/sot_gui'])],
+      data_files = [('bin',['src/sot-gui2.py'])],
       requires = ["gtkgl",'pygtk']
      )
 

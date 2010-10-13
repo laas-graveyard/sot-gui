@@ -2,13 +2,19 @@
 
 __author__ = "Duong Dang"
 
-__version__ = "0.3"
+__version__ = "2.0"
 
-from sotwindow import *                                                                                                                       
+import os, sys
+import gtk, gobject
+if os.path.isfile('sotwindow.py'):
+    from sotwindow import SotWindow
+else:
+    from sotgui.sotwindow import SotWindow
+
 
 # try:
 #     from sotwindow import *
-# except ImportError:    
+# except ImportError:
 #     from sotgui.sotwindow import *
 
 def main():
@@ -45,7 +51,7 @@ def main():
 
     parser.add_option(
         '--script-dir',
-        action='store', type='string', dest='script_dir', 
+        action='store', type='string', dest='script_dir',
         help='specify script directory ')
 
 

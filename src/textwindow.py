@@ -676,7 +676,7 @@ class Script(Entity):
 
     def __str__(self):
         return "Script " + self._name + " located at %s"\
-            %str(self._coor) + " with %s children"%len(self._children)
+            %str(self._ref) + " with %s children"%len(self._children)
 
     def parse(self):
         lines = open(self._name).readlines()

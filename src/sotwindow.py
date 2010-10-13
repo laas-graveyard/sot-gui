@@ -490,7 +490,7 @@ class SotWindow(gtk.Window):
         #   Text window
         #
         self.text_window = TextWindow(self)
-        self.sotobj = corba_util.GetObject("hppCorbaServer",'hppCorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
+        self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
 
 
 
@@ -520,6 +520,7 @@ class SotWindow(gtk.Window):
                 self.logger.warning("wrong time format %s"%result_str )
             else:
                 period = 0.005
+                robottime = 0.0
                 if self.robotType == '(RobotSimu)':
                     period = 0.05
                     robottime = ticks*period
@@ -849,7 +850,7 @@ class SotWindow(gtk.Window):
         coshell_hist_window.hide()
 
     def init_corba_button_clicked_cb(self, widget, data = None):
-        self.sotobj = corba_util.GetObject("hppCorbaServer",'hppCorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
+        self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
 
 
     def gtk_main_quit(self, widget, data = None):
