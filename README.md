@@ -1,19 +1,20 @@
-=== Dependencies ===
- * Python 2.6
+sot-gui
+===========
 
- * SimpleParse 2.1 
-   http://simpleparse.sourceforge.net/
- 
- * omniORB 4.1.4 (optional)
-   http://omniORB.sourceforge.net
+This package provides an user interface to the stack of tasks frameworks
 
-=== INSTALLATION ===
 
-  * MacOS X:
-      On Snow Leopard, python is set to 64 bit by default, that can cause pyglet to crash, 
-      if that happens on your system, try:
-         defaults write com.apple.versioner.python Prefer-32-Bit -bool yes   
+Setup
+-----
+Make sure you have the following dependency:
+    [SimpleParse](http://simpleparse.sourceforge.net/)
+    [omniORB 4.1.4](http://omniORB.sourceforge.net)
+    [robot-viewer]((https://github.com/laas/robot-viewer)
 
-=== USAGE ===
- * Stand-alone mode
- * Server-client mode (requires omniORB (corbaserver))
+To install this package:
+    setup setup.py install --prefix $YOUR_PREFIX
+
+Usage
+-----
+
+    sot-gui2.py
