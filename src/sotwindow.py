@@ -21,11 +21,13 @@ from collections import deque
 import corba_util
 import logging
 import logging.handlers
-sys.path = [os.path.dirname(os.path.abspath(__file__))+"/idl"] + sys.path
+sys.path = [os.path.dirname(os.path.abspath(__file__))
+            +"/idl"] + sys.path
 
 class MyHandler(logging.handlers.RotatingFileHandler):
 
-    def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None) :
+    def __init__(self, filename, mode='a',
+                 maxBytes=0, backupCount=0, encoding=None) :
         logging.handlers.RotatingFileHandler.__init__\
             (self, filename, mode, maxBytes, backupCount, encoding)
         self.last_warning = ""
@@ -66,7 +68,8 @@ class TextWindow(TextWindowBase):
         - `filename`:
         """
         self.sotwin.coshell_entry.set_text("run %s"%filename)
-        self.sotwin.coshell_entry_activate_cb(self.sotwin.coshell_entry)
+        self.sotwin.coshell_entry_activate_cb(
+            self.sotwin.coshell_entry)
 
     def run_cmd(self,cmd):
         """
@@ -75,7 +78,8 @@ class TextWindow(TextWindowBase):
         - `filename`:
         """
         self.sotwin.coshell_entry.set_text("%s"%cmd)
-        self.sotwin.coshell_entry_activate_cb(self.sotwin.coshell_entry)
+        self.sotwin.coshell_entry_activate_cb(
+            self.sotwin.coshell_entry)
 
     def window_destroy_cb(self, widget, data=None):
         self.sotwin.text_window_destroyed = True
@@ -637,6 +641,8 @@ class SotWindow(gtk.Window):
             result = self.sotobj.runAndRead(s)
         except Exception,error:
             self.logger.exception("Caught exception %s"%error)
+            self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
+
 #            self.corba_broken_cb()
             return ""
         return result
@@ -645,6 +651,7 @@ class SotWindow(gtk.Window):
     def get_HRP_config(self):
         if not self.hrp_simuName:
             self.logger.warning("SotWindow.get_HRP_config Can't find OpenHRP entity")
+            self.widget.reload()
             return None
 
         if not self.has_dyn:
@@ -670,6 +677,15 @@ class SotWindow(gtk.Window):
 
         if self.robotType == "(RobotSimu)":
             pos[2] += 0.105
+
+        # dynsmall thingy
+        if len(pos) == 36:
+            pos_full = [0 for i in range(46)]
+            for i in range(29):
+                pos_full[i] = pos[i]
+            for i in range(29,36):
+                pos_full[i+5] = pos[i]
+            return pos_full
 
         return pos
 
