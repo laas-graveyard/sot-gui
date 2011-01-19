@@ -641,7 +641,7 @@ class SotWindow(gtk.Window):
             result = self.sotobj.runAndRead(s)
         except Exception,error:
             self.logger.exception("Caught exception %s"%error)
-            self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
+            # self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
 
 #            self.corba_broken_cb()
             return ""
