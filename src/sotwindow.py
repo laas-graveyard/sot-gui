@@ -14,7 +14,6 @@ import gobject
 import pygtk
 pygtk.require('2.0')
 import gtk,sys
-from termwidget import TermWidget
 from textwindow import TextWindowBase
 import gtk.glade
 from collections import deque
@@ -23,6 +22,20 @@ import logging
 import logging.handlers
 sys.path = [os.path.dirname(os.path.abspath(__file__))
             +"/idl"] + sys.path
+
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
+
+logger = logging.getLogger("sotwindow")
+logger.addHandler(NullHandler())
+logger.setLevel(logging.DEBUG)
+
+try:
+    from termwidget import TermWidget
+except:
+    logger.warning("termwidget couldn't be loaded")
 
 class MyHandler(logging.handlers.RotatingFileHandler):
 
@@ -425,17 +438,12 @@ class SotWindow(gtk.Window):
         os.system('mkdir -p %s/.sot-gui/scripts'%os.environ['HOME'])
         os.system('mkdir -p %s/.sot-gui/log'%os.environ['HOME'])
         self.log_filename = '%s/.sot-gui/log/SotWindow.log'%os.environ['HOME']
-        self.logger = logging.getLogger('SotWindow')
-        self.log_level = logging.WARNING
-        if options and options.debug:
-            self.log_level = logging.DEBUG
-        self.logger.setLevel(self.log_level)
 
         formatter = logging.Formatter("%(asctime)s : %(name)s : %(levelname)s : %(message)s")
         self.handler = MyHandler(self.log_filename, maxBytes = 10000000, backupCount=5)
         self.handler.setFormatter(formatter)
 
-        self.logger.addHandler(self.handler)
+        logger.addHandler(self.handler)
 
 
         ######################################################################
@@ -452,7 +460,7 @@ class SotWindow(gtk.Window):
                 if pos:
                     self.rvwidget.updateElementConfig(self.setting.hrp_rvname,pos)
                 else:
-                    self.logger.warning('Couldnt get robot config')
+                    logger.warning('Couldnt get robot config')
                 return True
             gobject.timeout_add(40,update_HRP_config)
 
@@ -494,8 +502,11 @@ class SotWindow(gtk.Window):
         #   Text window
         #
         self.text_window = TextWindow(self)
-        self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
-
+        try:
+            self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
+        except:
+            logger.exception("Couldnt create sotobj")
+            self.sotobj = None
 
 
     #
@@ -513,7 +524,7 @@ class SotWindow(gtk.Window):
         result_str = None
         self.runAndRead("echo")
         if not self.hrp_simuName:
-            self.logger.warning("SotWindow.house_keep Can't find OpenHRP entity")
+            logger.warning("SotWindow.house_keep Can't find OpenHRP entity")
         else:
             result_str = self.runAndRead("signalTime %s.state"%self.hrp_simuName)
 
@@ -521,7 +532,7 @@ class SotWindow(gtk.Window):
             try:
                 ticks = int(result_str)
             except:
-                self.logger.warning("wrong time format %s"%result_str )
+                logger.warning("wrong time format %s"%result_str )
             else:
                 period = 0.005
                 robottime = 0.0
@@ -552,7 +563,7 @@ class SotWindow(gtk.Window):
             self.set_dotcode(fp.read(), filename)
             fp.close()
         except IOError, ex:
-            self.logger.exception("%s"%ex)
+            logger.exception("%s"%ex)
 
     def set_dotcode(self, dotcode, filename='<stdin>'):
          if self.widget.set_dotcode(dotcode, filename):
@@ -637,10 +648,10 @@ class SotWindow(gtk.Window):
 
     def runAndRead(self,s):
         try:
-            self.logger.debug("coshell-> %s"%s)
+            logger.debug("coshell-> %s"%s)
             result = self.sotobj.runAndRead(s)
         except Exception,error:
-            self.logger.exception("Caught exception %s"%error)
+            logger.exception("Caught exception %s"%error)
             self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
 
 #            self.corba_broken_cb()
@@ -650,26 +661,26 @@ class SotWindow(gtk.Window):
 
     def get_HRP_config(self):
         if not self.hrp_simuName:
-            self.logger.warning("SotWindow.get_HRP_config Can't find OpenHRP entity")
+            logger.warning("SotWindow.get_HRP_config Can't find OpenHRP entity")
             self.widget.reload()
             return None
 
         if not self.has_dyn:
-            self.logger.warning("SotWindow.get_HRP_config Can't find dyn entity")
+            logger.warning("SotWindow.get_HRP_config Can't find dyn entity")
             return None
 
         try:
-            self.logger.debug("calling self.sotobj.req_obj.readVector('OpenHRP.state')")
+            logger.debug("calling self.sotobj.req_obj.readVector('OpenHRP.state')")
             pos = self.sotobj.readVector("OpenHRP.state")
-            self.logger.debug("calling self.sotobj.req_obj.readVector('dyn.ffposition')")
+            logger.debug("calling self.sotobj.req_obj.readVector('dyn.ffposition')")
             wst = self.sotobj.readVector("dyn.ffposition")
         except Exception,error:
-            self.logger.exception("Caught exception %s"%error)
+            logger.exception("Caught exception %s"%error)
             # self.corba_broken_cb()
             return None
 
         if len(wst) != 6:
-            self.logger.warning("RvWidget: Wrong dimension of waist_pos, robot not updated")
+            logger.warning("RvWidget: Wrong dimension of waist_pos, robot not updated")
             return None
 
         for i in range(len(wst)):
@@ -732,7 +743,7 @@ class SotWindow(gtk.Window):
         def rv_incr_cb():
             self.rv_cnt += 1
             if not self.hrp_simuName:
-                self.logger.warning("SotWindow.rv_incr_cb Can't find OpenHRP entity")
+                logger.warning("SotWindow.rv_incr_cb Can't find OpenHRP entity")
                 return True
             cmd = "%s.inc %f"%(self.hrp_simuName, self.setting.simu_dt)
             self.runAndRead(cmd)
@@ -769,7 +780,7 @@ class SotWindow(gtk.Window):
             try:
                 gobject.source_remove(self.coshell_timeout_source_id)
             except Exception,error:
-                self.logger.exception("Caught exception %s"%error)
+                logger.exception("Caught exception %s"%error)
 
         if self.coshell_each_button.get_active()==0:
             return True
@@ -777,7 +788,7 @@ class SotWindow(gtk.Window):
             try:
                 period = float(self.coshell_period.get_text())
             except Exception,error:
-                self.logger.exception("Caught exception %s"%error)
+                logger.exception("Caught exception %s"%error)
                 return True
             if period < 0:
                 return True
@@ -860,7 +871,7 @@ class SotWindow(gtk.Window):
             self.text_window.show_all()
 
     def view_coshell_hist_activate_cb(self, widget, data = None):
-        self.logger.debug("view_coshell_hist_menu_activate_cb called")
+        logger.debug("view_coshell_hist_menu_activate_cb called")
         coshell_hist_window = self.builder.get_object('coshell_hist_window')
         coshell_hist_window.run()
         coshell_hist_window.hide()
@@ -887,13 +898,13 @@ class SotWindow(gtk.Window):
         response = chooser.run()
         if response == gtk.RESPONSE_OK:
             filename = chooser.get_filename()
-            self.logger.debug("User selects %s script"%filename)
+            logger.debug("User selects %s script"%filename)
             if filename:
                 self.coshell_entry.set_text("run %s"%filename)
                 self.coshell_entry_activate_cb(self.coshell_entry)
 
         elif response == gtk.RESPONSE_CANCEL:
-            self.logger.debug("Run script canceled by user")
+            logger.debug("Run script canceled by user")
 
         chooser.destroy()
         return
@@ -930,6 +941,6 @@ class SotWindow(gtk.Window):
 
     def debug_menu_item_toggled_cb(self, widget, data = None):
         if widget.get_active == 0:
-            self.logger.setLevel(logging.CRITICAL)
+            logger.setLevel(logging.CRITICAL)
         if widget.get_active == 0:
-            self.logger.setLevel(self.log_level)
+            logger.setLevel(self.log_level)
