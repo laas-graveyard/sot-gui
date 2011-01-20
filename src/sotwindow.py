@@ -21,6 +21,8 @@ from collections import deque
 import corba_util
 import logging
 import logging.handlers
+import pickle
+
 sys.path = [os.path.dirname(os.path.abspath(__file__))
             +"/idl"] + sys.path
 
@@ -129,6 +131,7 @@ class SotWidget(DotWidget):
         DotWidget.__init__(self)
         self.sotwin = sw
         self.openfilename = self.sot_graph_file
+
     def fetch_info_and_graph(self):
         self.sotwin.runAndRead("pool.writegraph %s"%self.sot_graph_file)
 
@@ -184,6 +187,7 @@ class SotWidget(DotWidget):
             f = open(self.sot_graph_file,'w')
             f.write(s)
             f.close()
+            self.sotwin.graph_text = s
         return
 
     def reload(self):
@@ -235,6 +239,7 @@ class SotWidget(DotWidget):
         if entity_name == None:
             return
 
+        # select the appropriate entity and signal in treeviews
         try:
             iter = self.sotwin.en_model.get_iter_first()
             while self.sotwin.en_model[iter][0] != entity_name:
@@ -307,7 +312,8 @@ class SotWindow(gtk.Window):
         os.system("rm -f %s"%SotWidget.sot_graph_file)
         self.win = self
         self.setting = Setting()
-
+        self.is_offline = False
+        self.graph_text = ""
         ######################################################################
         #   Main window
         #
@@ -391,7 +397,7 @@ class SotWindow(gtk.Window):
         self.coshell_combo_box_entry.set_model( self.coshell_hist_model)
         self.coshell_combo_box_entry.set_text_column(0)
         self.coshell_entry.connect('activate',self.coshell_entry_activate_cb)
-
+        self.coshell_cached = {}
 #        self.coshell_response =  self.builder.get_object("coshell_response")
 #        self.coshell_frame =  self.builder.get_object("coshell_frame")
 
@@ -562,8 +568,37 @@ class SotWindow(gtk.Window):
          if self.widget.set_xdotcode(dotcode, filename):
             self.widget.zoom_to_fit()
 
+
+    def take_snapshot_button_clicked_cb(self, widget, data=None):
+        # cached the following:
+        # for all entity:
+        #       entity.help
+        #       entity.print
+        #       entity.signals
+        #       for all signals:
+        #           get signal
+        #           entity.signalDep signal
+        #
+        sig_pattern = re.compile(r".*(input|output)\((\w+)\)::(\w+)*")
+        for line in self.en_model:
+            ent = line[0]
+            ent_type = line[1]
+            self.runAndRead("%s.help"%ent)
+            self.runAndRead("%s.print"%ent)
+            list_signals = self.runAndRead("%s.signals"%ent)
+            for line in list_signals.splitlines():
+                m = sig_pattern.match(line)
+                if m:
+                    sig = m.group(3)
+                    self.runAndRead('get %s.%s'%(ent,sig))
+                    self.runAndRead('%s.signalDep %s'%(ent,sig))
+
     def tree_view_sel_callback(self,treeview,animate = True):
         ent = sig = io = cmd = io = None
+        # click on an entity entry:
+        #   * update signal treeview
+        #   * display appropriate info
+
         if treeview == self.en_tree_view:
             (model, iter) = treeview.get_selection().get_selected()
             row = model[iter]
@@ -636,9 +671,17 @@ class SotWindow(gtk.Window):
         self.widget.queue_draw()
 
     def runAndRead(self,s):
+        if self.is_offline:
+            if s in self.coshell_cached.keys():
+                return self.coshell_cached[s]
+            else:
+                return ""
+
+
         try:
             self.logger.debug("coshell-> %s"%s)
             result = self.sotobj.runAndRead(s)
+            self.coshell_cached[s] = result
         except Exception,error:
             self.logger.exception("Caught exception %s"%error)
             # self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
@@ -929,7 +972,57 @@ class SotWindow(gtk.Window):
         self.widget.on_zoom_fit(  widget )
 
     def debug_menu_item_toggled_cb(self, widget, data = None):
-        if widget.get_active == 0:
+        if widget.get_active() == 0:
             self.logger.setLevel(logging.CRITICAL)
-        if widget.get_active == 0:
+        if widget.get_active() == 0:
             self.logger.setLevel(self.log_level)
+
+    def offline_button_toggled_cb(self, widget, data = None):
+        self.is_offline = widget.get_active()
+        self.coshell_entry.set_editable(not self.is_offline)
+        self.init_corba_button.set_sensitive(not self.is_offline)
+        self.take_snapshot_button.set_sensitive(not self.is_offline)
+        self.refresh_button.set_sensitive(not self.is_offline)
+
+    def save_snapshot_activate_cb(self, widget, data = None):
+        chooser = gtk.FileChooserDialog("Open File...", self,
+                                        gtk.FILE_CHOOSER_ACTION_SAVE,
+                                        (gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,
+                                         gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+        filt = gtk.FileFilter()
+        response = chooser.run()
+        filename = None
+        if response == gtk.RESPONSE_OK:
+            filename = chooser.get_filename()
+        chooser.destroy()
+        if not filename:
+            return
+        self.logger.info("Saving snapshot to %s"%filename)
+        f = open(filename, 'w')
+        pickle.dump([self.graph_text, self.coshell_cached], f)
+        f.close()
+
+    def open_snapshot_activate_cb(self, widget, data = None):
+        if not self.offline_button.get_active():
+            self.offline_button.clicked()
+        self.is_offline = True
+        chooser = gtk.FileChooserDialog("Open File...", self,
+                                        gtk.FILE_CHOOSER_ACTION_OPEN,
+                                        (gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,
+                                         gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+        filt = gtk.FileFilter()
+        response = chooser.run()
+        filename = None
+        if response == gtk.RESPONSE_OK:
+            filename = chooser.get_filename()
+        chooser.destroy()
+        if not filename:
+            return
+        f = open(filename, 'r')
+        self.graph_text, self.coshell_cached = pickle.load(f)
+        f.close()
+        f = open(SotWidget.sot_graph_file,'w')
+        f.write(self.graph_text)
+        f.close()
+        self.widget.fetch_info_and_graph()
+        self.widget.reload()
