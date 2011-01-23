@@ -43,6 +43,22 @@
                         <property name="use_stock">True</property>
                       </object>
                     </child>
+                    <child>
+                      <object class="GtkMenuItem" id="save_snapshot">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Save snapshot</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="save_snapshot_activate_cb"/>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="open_snapshot">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Open Snapshot</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="open_snapshot_activate_cb"/>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
@@ -497,6 +513,19 @@
                                 <property name="homogeneous">True</property>
                               </packing>
                             </child>
+                            <child>
+                              <object class="GtkToolButton" id="take_snapshot_button">
+                                <property name="visible">True</property>
+                                <property name="label" translatable="yes">Take snapshot</property>
+                                <property name="use_underline">True</property>
+                                <property name="stock_id">gtk-media-record</property>
+                                <signal name="clicked" handler="take_snapshot_button_clicked_cb"/>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="homogeneous">True</property>
+                              </packing>
+                            </child>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -833,8 +862,24 @@
                       </packing>
                     </child>
                     <child>
+                      <object class="GtkCheckButton" id="offline_button">
+                        <property name="label" translatable="yes">Offline</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">False</property>
+                        <property name="yalign">0.44999998807907104</property>
+                        <property name="draw_indicator">True</property>
+                        <signal name="toggled" handler="offline_button_toggled_cb"/>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                        <property name="position">3</property>
+                      </packing>
+                    </child>
+                    <child>
                       <object class="GtkButton" id="init_corba_button">
-                        <property name="label" translatable="yes">corba</property>
+                        <property name="label" translatable="yes">init corba</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">True</property>
@@ -845,7 +890,7 @@
                       <packing>
                         <property name="expand">False</property>
                         <property name="fill">False</property>
-                        <property name="position">3</property>
+                        <property name="position">4</property>
                       </packing>
                     </child>
                   </object>
@@ -1036,5 +1081,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</property>
   <object class="GtkImage" id="image2">
     <property name="visible">True</property>
     <property name="stock">gtk-missing-image</property>
+  </object>
+  <object class="GtkRadioAction" id="radioaction1">
+    <property name="draw_as_radio">True</property>
   </object>
 </interface>
