@@ -1037,4 +1037,3 @@ class SotWindow(gtk.Window):
         f.close()
         self.widget.fetch_info_and_graph()
         self.widget.reload()
->>>>>>> 03b79f7576dcbc4894a771571b98556f87d107e3
