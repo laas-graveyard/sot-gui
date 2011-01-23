@@ -164,7 +164,7 @@ class SotWidget(DotWidget):
         try:
             tree_iter = self.sotwin.en_model.get_iter_first()
         except:
-            self.sotwin.logger.exception("Caught exception")
+            logger.exception("Caught exception")
         else:
             while tree_iter:
                 aname = self.sotwin.en_model[tree_iter]
@@ -207,7 +207,7 @@ class SotWidget(DotWidget):
                 self.set_dotcode(fp.read(), self.openfilename)
                 fp.close()
             except IOError:
-                self.sotwin.logger.exception("Caught exception")
+                logger.exception("Caught exception")
 
     def mouse_click_action(self,jump):
         item = jump.item
@@ -266,7 +266,7 @@ class SotWidget(DotWidget):
             self.sotwin.sig_selection.select_iter(iter)
             self.sotwin.tree_view_sel_callback(self.sotwin.sig_tree_view,False)
         except Exception,error:
-            self.sotwin.logger.exception("Caught exception %s"%error)
+            logger.exception("Caught exception %s"%error)
 
         return
 
@@ -652,7 +652,7 @@ class SotWindow(gtk.Window):
             result = self.sotobj.runAndRead(s)
         except Exception,error:
             logger.exception("Caught exception %s"%error)
-            self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
+            # self.sotobj = corba_util.GetObject("CorbaServer",'CorbaServer.SOT_Server_Command',[('sot','context'),('coshell','servant')])
 
 #            self.corba_broken_cb()
             return ""
