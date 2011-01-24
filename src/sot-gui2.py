@@ -4,6 +4,7 @@ __author__ = "Duong Dang"
 
 __version__ = "2.0"
 
+import logging
 import os, sys
 import gtk, gobject
 if os.path.isfile('sotwindow.py'):
@@ -11,6 +12,17 @@ if os.path.isfile('sotwindow.py'):
 else:
     from sotgui.sotwindow import SotWindow
 
+logger = logging.getLogger()
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+# create formatter and add it to the handlers
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+ch.setFormatter(formatter)
+# add the handlers to the logger
+logger.addHandler(ch)
 
 # try:
 #     from sotwindow import *
