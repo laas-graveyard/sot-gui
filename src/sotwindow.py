@@ -983,6 +983,7 @@ class SotWindow(gtk.Window):
         self.init_corba_button.set_sensitive(not self.is_offline)
         self.take_snapshot_button.set_sensitive(not self.is_offline)
         self.refresh_button.set_sensitive(not self.is_offline)
+        self.save_snapshot.set_sensitive(not self.is_offline)
 
     def save_snapshot_activate_cb(self, widget, data = None):
         chooser = gtk.FileChooserDialog("Open File...", self,
